@@ -1,0 +1,58 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+class Venta extends Model
+{
+    use HasFactory;
+
+    protected $table = 'ventas';
+
+    protected $fillable = [
+        'cliente_nombre',
+        'cliente_telefono',
+        'cliente_direccion',
+        'tipo_entrega',
+        'costo_flete',
+        'metodo_pago',
+        'cuotas',
+        'subtotal',
+        'descuento',
+        'precio_total',
+        'fecha_compra',
+        'estado',
+        'notas',
+    ];
+
+    protected $casts = [
+        'fecha_compra' => 'datetime',
+        'costo_flete' => 'decimal:2',
+        'subtotal' => 'decimal:2',
+        'descuento' => 'decimal:2',
+        'precio_total' => 'decimal:2',
+        'cuotas' => 'integer',
+    ];
+
+    // --- RELACIONES ---
+
+    /**
+     * Relación uno a muchos hacia la tabla pivote/detalle (DetalleVenta)
+     */
+    public function detalles()
+    {
+        return $this->hasMany(DetalleVenta::class, 'venta_id');
+    }
+
+    /**
+     * Relación muchos a muchos hacia Productos con atributos del detalle
+     */
+    public function productos()
+    {
+        return $this->belongsToMany(Producto::class, 'detalle_venta', 'venta_id', 'producto_id')
+                    ->withPivot('cantidad', 'precio_unitario', 'subtotal')
+                    ->withTimestamps();
+    }
+}
