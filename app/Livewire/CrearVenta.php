@@ -159,4 +159,24 @@ class CrearVenta extends Component
             'productosEncontrados' => $productosEncontrados
         ]);
     }
+
+    public function agregarPrimerProducto()
+    {
+        if (strlen(trim($this->buscarProducto)) >= 1) {
+            $query = trim($this->buscarProducto);
+            
+            $producto = Producto::where('activo', true)
+                ->where(function ($q) use ($query) {
+                    $q->where('nombre', 'like', '%' . $query . '%')
+                    ->orWhere('marca', 'like', '%' . $query . '%')
+                    ->orWhere('modelo', 'like', '%' . $query . '%');
+                })
+                ->first();
+
+            if ($producto) {
+                $this->agregarProducto($producto->id);
+            }
+        }
+    }
+
 }

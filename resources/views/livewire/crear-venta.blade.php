@@ -9,26 +9,30 @@
             <div class="relative">
                 <input 
                     type="text" 
-                    wire:model.live.debounce.250ms="buscarProducto" 
+                    wire:model.live.debounce.150ms="buscarProducto" 
+                    wire:keydown.enter.prevent="agregarPrimerProducto"
                     placeholder="Escribe el nombre, marca o modelo del producto..." 
                     class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                 >
 
-                <!-- Menú desplegable con resultados instantáneos -->
-                @if(!empty($productosEncontrados) && count($productosEncontrados) > 0)
-                    <div class="absolute z-10 w-full bg-white border rounded-md shadow-lg mt-1 divide-y">
+                <!-- Menú desplegable -->
+                @if(!empty($productosEncontrados) && count($productosEncontrados) > 0 && strlen(trim($buscarProducto)) >= 1)
+                    <div class="absolute z-50 w-full bg-white border border-gray-200 rounded-md shadow-lg mt-1 divide-y divide-gray-100 max-h-60 overflow-y-auto">
                         @foreach($productosEncontrados as $p)
                             <div 
-                                wire:click="agregarProducto({{ $p->id }})" 
-                                class="p-3 hover:bg-indigo-50 cursor-pointer flex justify-between items-center"
+                                wire:key="prod-{{ $p->id }}"
+                                wire:mousedown.prevent="agregarProducto({{ $p->id }})" 
+                                class="p-3 hover:bg-indigo-50 cursor-pointer flex justify-between items-center transition-colors"
                             >
                                 <div>
                                     <span class="font-semibold text-gray-900">{{ $p->nombre }}</span>
-                                    <span class="text-xs text-gray-500 ml-2">({{ $p->marca ?? 'S/M' }})</span>
+                                    @if($p->marca)
+                                        <span class="text-xs text-gray-500 ml-2">({{ $p->marca }})</span>
+                                    @endif
                                 </div>
                                 <div class="text-right">
                                     <span class="font-bold text-indigo-600">$ {{ number_format($p->precio_venta, 2) }}</span>
-                                    <span class="text-xs block text-gray-400">Stock: {{ $p->stock ?? 'Sin control' }}</span>
+                                    <span class="text-xs block text-gray-400">Stock: {{ $p->stock ?? 'N/A' }}</span>
                                 </div>
                             </div>
                         @endforeach
