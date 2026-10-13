@@ -83,7 +83,6 @@ new class extends Component
                 <thead>
                     <tr class="bg-slate-200/50 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase tracking-wider">
                         <th class="px-6 py-3.5">Usuario / Cliente</th>
-                        <th class="px-6 py-3.5">Documento</th>
                         <th class="px-6 py-3.5">Contacto</th>
                         <th class="px-6 py-3.5">Rol</th>
                         <th class="px-6 py-3.5">Estado</th>
@@ -93,26 +92,13 @@ new class extends Component
                 <tbody class="divide-y divide-slate-200/60 text-xs">
                     @forelse ($usuarios as $u)
                         <tr wire:key="user-{{ $u->id }}" class="hover:bg-indigo-100/30 transition-colors group">
-                            <!-- Nombre y Email -->
+                            <!-- Nombre de usuario como link directo a Ver -->
                             <td class="px-6 py-4">
-                                <span class="font-bold text-slate-900 block group-hover:text-indigo-700 transition-colors">
+                                <a href="{{ route('usuarios.show', $u->id) }}" class="font-bold text-slate-900 block hover:text-indigo-700 transition-colors">
                                     {{ $u->nombre_completo }}
-                                </span>
+                                </a>
                                 <span class="text-[11px] text-slate-500">{{ $u->email }}</span>
                             </td>
-
-                            <!-- Documento -->
-                            <td class="px-6 py-4 font-medium text-slate-700">
-                                @if($u->documento)
-                                    <span class="bg-slate-200/70 text-slate-800 px-2 py-0.5 rounded text-[10px] font-bold mr-1">
-                                        {{ $u->tipo_documento }}
-                                    </span>
-                                    <span>{{ $u->documento }}</span>
-                                @else
-                                    <span class="text-slate-400">-</span>
-                                @endif
-                            </td>
-
                             <!-- Teléfono -->
                             <td class="px-6 py-4 text-slate-600 font-medium">
                                 {{ $u->telefono ?? '-' }}
@@ -136,13 +122,13 @@ new class extends Component
                                 </span>
                             </td>
 
-                            <!-- Acciones (Enlace al Controller) -->
+                            <!-- Botón de Acción Ver -->
                             <td class="px-6 py-4 text-right">
                                 <a 
-                                    href="{{ route('usuarios.edit', $u->id) }}" 
-                                    class="inline-flex items-center gap-1 text-xs font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-100/80 hover:bg-indigo-200 px-3 py-1.5 rounded-lg transition-colors"
+                                    href="{{ route('usuarios.show', $u->id) }}" 
+                                    class="inline-flex items-center gap-1 text-xs font-bold text-slate-700 hover:text-slate-900 bg-slate-200/80 hover:bg-slate-300 px-3 py-1.5 rounded-lg transition-colors"
                                 >
-                                    Editar
+                                    🔍 Ver Ficha
                                 </a>
                             </td>
                         </tr>

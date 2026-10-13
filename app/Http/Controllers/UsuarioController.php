@@ -15,6 +15,17 @@ class UsuarioController extends Controller
         return view('usuarios.index');
     }
 
+    public function show(Usuario $usuario)
+    {
+        // Cargamos las direcciones y las últimas ventas del cliente
+        $usuario->load(['role', 'direcciones', 'ventas' => function ($q) {
+            $q->latest()->take(5);
+        }]);
+
+    return view('usuarios.show', compact('usuario'));
+}
+
+
     public function create()
     {
         $roles = Role::all();

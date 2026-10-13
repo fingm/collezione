@@ -41,7 +41,7 @@ new class extends Component
                     type="text" 
                     wire:model.live.debounce.300ms="buscar" 
                     placeholder="Buscar por nombre, marca o modelo..." 
-                    class="pl-10 pr-4 py-2.5 text-sm bg-slate-50 border-slate-300/80 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 text-slate-800 rounded-lg shadow-sm w-full transition-all duration-150 placeholder-slate-400"
+                    class="w-full pl-9 pr-4 py-2 text-xs bg-slate-50 border-slate-300/80 rounded-lg shadow-sm focus:border-indigo-500 text-slate-800 placeholder-slate-400"
                 >
             </div>
             

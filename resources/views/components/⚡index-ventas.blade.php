@@ -53,7 +53,8 @@ new class extends Component
             <input 
                 type="date" 
                 wire:model.live="fecha" 
-                class="border-slate-300/80 bg-slate-50 text-slate-800 rounded-lg shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 text-sm px-3 py-1.5"
+                class="text-xs bg-slate-50 border-slate-300/80 rounded-lg shadow-sm focus:border-indigo-500 text-slate-800 placeholder-slate-400""
+
             >
             <button 
                 type="button" 
