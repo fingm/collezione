@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\DB;
 
 new class extends Component
 {
-    // Búsqueda de productos
+    // Búsqueda de productos en la barra superior
     public $buscarProducto = '';
 
     // Carrito temporal: array de productos agregados
@@ -162,17 +162,33 @@ new class extends Component
         if (trim($this->buscarProducto) !== '') {
             $query = trim($this->buscarProducto);
 
-            $productosEncontrados = Producto::where(function ($q) use ($query) {
-                $q->where('nombre', 'like', '%' . $query . '%')
-                ->orWhere('marca', 'like', '%' . $query . '%')
-                ->orWhere('modelo', 'like', '%' . $query . '%');
-            })
-            ->take(5)
-            ->get();
+            $productosEncontrados = Producto::where('activo', true)
+                ->where(function ($q) use ($query) {
+                    $q->where('nombre', 'like', '%' . $query . '%')
+                    ->orWhere('marca', 'like', '%' . $query . '%')
+                    ->orWhere('modelo', 'like', '%' . $query . '%');
+                })
+                ->take(5)
+                ->get();
         }
 
+        // Catálogo de productos activos disponibles para elegir directamente
+        $catalogoProductos = Producto::where('activo', true)
+            ->when(trim($this->buscarProducto) !== '', function ($q) {
+                $query = trim($this->buscarProducto);
+                $q->where(function ($sub) use ($query) {
+                    $sub->where('nombre', 'like', '%' . $query . '%')
+                        ->orWhere('marca', 'like', '%' . $query . '%')
+                        ->orWhere('modelo', 'like', '%' . $query . '%');
+                });
+            })
+            ->latest()
+            ->take(12)
+            ->get();
+
         return [
-            'productosEncontrados' => $productosEncontrados
+            'productosEncontrados' => $productosEncontrados,
+            'catalogoProductos'    => $catalogoProductos,
         ];
     }
 };
@@ -180,91 +196,142 @@ new class extends Component
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-    <!-- COLUMNA IZQUIERDA: Buscador y Carrito de Productos (2 Columnas) -->
+    <!-- COLUMNA IZQUIERDA: Buscador, Catálogo y Carrito (2 Columnas) -->
     <div class="lg:col-span-2 space-y-6">
 
         <!-- Buscador de Productos -->
-        <div class="bg-white p-6 rounded-lg shadow-sm">
-            <h3 class="text-lg font-bold text-gray-800 mb-3">1. Seleccionar Productos</h3>
+        <div class="bg-slate-100/70 border border-slate-200/60 p-6 rounded-xl shadow-sm space-y-3">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700">1. Buscar o Seleccionar Productos</h3>
             <div class="relative">
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <svg class="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0"/>
+                    </svg>
+                </div>
                 <input 
                     type="text" 
                     wire:model.live.debounce.150ms="buscarProducto" 
                     wire:keydown.enter.prevent="agregarPrimerProducto"
-                    placeholder="Escribe el nombre, marca o modelo del producto..." 
-                    class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                    placeholder="Escribe el nombre, marca o modelo para filtrar..." 
+                    class="w-full pl-9 pr-4 py-2.5 text-sm bg-slate-50 border-slate-300/80 rounded-lg shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 text-slate-800 placeholder-slate-400"
                 >
 
-                <!-- Menú desplegable -->
+                <!-- Autocompletado rápido emergente -->
                 @if(!empty($productosEncontrados) && count($productosEncontrados) > 0 && strlen(trim($buscarProducto)) >= 1)
-                    <div class="absolute z-50 w-full bg-white border border-gray-200 rounded-md shadow-lg mt-1 divide-y divide-gray-100 max-h-60 overflow-y-auto">
+                    <div class="absolute z-50 w-full bg-slate-50 border border-slate-200 rounded-xl shadow-xl mt-1 divide-y divide-slate-200/60 max-h-60 overflow-y-auto">
                         @foreach($productosEncontrados as $p)
                             <div 
-                                wire:key="prod-{{ $p->id }}"
+                                wire:key="prod-search-{{ $p->id }}"
                                 wire:mousedown.prevent="agregarProducto({{ $p->id }})" 
-                                class="p-3 hover:bg-indigo-50 cursor-pointer flex justify-between items-center transition-colors"
+                                class="p-3 hover:bg-indigo-100/50 cursor-pointer flex justify-between items-center transition-colors"
                             >
                                 <div>
-                                    <span class="font-semibold text-gray-900">{{ $p->nombre }}</span>
+                                    <span class="font-bold text-xs text-slate-900 block">{{ $p->nombre }}</span>
                                     @if($p->marca)
-                                        <span class="text-xs text-gray-500 ml-2">({{ $p->marca }})</span>
+                                        <span class="text-[11px] text-slate-500">({{ $p->marca }})</span>
                                     @endif
                                 </div>
                                 <div class="text-right">
-                                    <span class="font-bold text-indigo-600">$ {{ number_format($p->precio_venta, 2) }}</span>
-                                    <span class="text-xs block text-gray-400">Stock: {{ $p->stock ?? 'N/A' }}</span>
+                                    <span class="font-black text-indigo-700 text-sm">$ {{ number_format($p->precio_venta, 2) }}</span>
+                                    <span class="text-[11px] block text-slate-500 font-medium">Stock: {{ $p->stock ?? 'N/A' }}</span>
                                 </div>
                             </div>
                         @endforeach
                     </div>
                 @endif
             </div>
-            @error('items') <span class="text-red-500 text-xs mt-1 block">{{ $message }}</span> @enderror
+            @error('items') <span class="text-red-600 text-xs mt-1 block font-semibold">{{ $message }}</span> @enderror
+        </div>
+
+        <!-- GRID/CATÁLOGO RÁPIDO DE PRODUCTOS PARA HACER CLIC -->
+        <div class="bg-slate-100/70 border border-slate-200/60 p-6 rounded-xl shadow-sm space-y-3">
+            <div class="flex justify-between items-center border-b border-slate-200/80 pb-2">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700">Catálogo Rápido (Haz Clic para Agregar)</h3>
+                <span class="text-[11px] font-semibold text-slate-500">{{ count($catalogoProductos) }} disponibles</span>
+            </div>
+
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 pt-1">
+                @forelse($catalogoProductos as $prod)
+                    <button 
+                        type="button"
+                        wire:key="cat-prod-{{ $prod->id }}"
+                        wire:click="agregarProducto({{ $prod->id }})"
+                        class="p-3 bg-slate-50 border border-slate-200/80 hover:border-indigo-400 hover:bg-indigo-50/50 rounded-xl text-left transition-all duration-150 shadow-xs hover:shadow-sm group cursor-pointer flex flex-col justify-between"
+                    >
+                        <div>
+                            <span class="text-xs font-bold text-slate-800 group-hover:text-indigo-700 line-clamp-2 block leading-tight">
+                                {{ $prod->nombre }}
+                            </span>
+                            @if($prod->marca)
+                                <span class="text-[10px] text-slate-400 block mt-0.5">{{ $prod->marca }}</span>
+                            @endif
+                        </div>
+
+                        <div class="mt-2 pt-2 border-t border-slate-200/50 flex items-center justify-between">
+                            <span class="text-xs font-black text-indigo-700">
+                                $ {{ number_format($prod->precio_venta, 0) }}
+                            </span>
+
+                            @if($prod->stock !== null)
+                                <span class="text-[10px] font-bold px-1.5 py-0.5 rounded {{ $prod->stock > 0 ? 'bg-slate-200/70 text-slate-600' : 'bg-red-100 text-red-700' }}">
+                                    St: {{ $prod->stock }}
+                                </span>
+                            @endif
+                        </div>
+                    </button>
+                @empty
+                    <div class="col-span-full py-6 text-center text-slate-400 text-xs font-medium">
+                        No se encontraron productos coincidentes en el catálogo.
+                    </div>
+                @endforelse
+            </div>
         </div>
 
         <!-- Tabla / Lista de Productos Agregados -->
-        <div class="bg-white p-6 rounded-lg shadow-sm">
-            <h3 class="text-lg font-bold text-gray-800 mb-3">Detalle de la Compra</h3>
-            <table class="min-w-full divide-y divide-gray-200">
-                <thead>
-                    <tr class="bg-gray-50 text-xs font-medium text-gray-500 uppercase">
-                        <th class="px-4 py-2 text-left">Producto</th>
-                        <th class="px-4 py-2 text-center">Precio</th>
-                        <th class="px-4 py-2 text-center">Cantidad</th>
-                        <th class="px-4 py-2 text-right">Subtotal</th>
-                        <th class="px-4 py-2 text-center">Acción</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-200">
-                    @forelse($items as $id => $item)
-                        <tr wire:key="item-{{ $id }}">
-                            <td class="px-4 py-3 text-sm font-medium text-gray-900">{{ $item['nombre'] }}</td>
-                            <td class="px-4 py-3 text-sm text-center">$ {{ number_format($item['precio_unitario'], 2) }}</td>
-                            <td class="px-4 py-3 text-sm text-center">
-                                <input 
-                                    type="number" 
-                                    min="1" 
-                                    value="{{ $item['cantidad'] }}" 
-                                    wire:change="actualizarCantidad({{ $id }}, $event.target.value)"
-                                    class="w-16 text-center border-gray-300 rounded-md p-1 text-sm"
-                                >
-                            </td>
-                            <td class="px-4 py-3 text-sm text-right font-semibold text-gray-900">$ {{ number_format($item['subtotal'], 2) }}</td>
-                            <td class="px-4 py-3 text-sm text-center">
-                                <button wire:click="quitarProducto({{ $id }})" class="text-red-600 hover:text-red-800 text-xs font-bold">
-                                    Quitar
-                                </button>
-                            </td>
+        <div class="bg-slate-100/70 border border-slate-200/60 p-6 rounded-xl shadow-sm space-y-4">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700">Detalle de la Compra</h3>
+            <div class="overflow-x-auto border border-slate-200/60 rounded-xl">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-200/50 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                            <th class="px-4 py-3">Producto</th>
+                            <th class="px-4 py-3 text-center">Precio</th>
+                            <th class="px-4 py-3 text-center">Cantidad</th>
+                            <th class="px-4 py-3 text-right">Subtotal</th>
+                            <th class="px-4 py-3 text-center">Acción</th>
                         </tr>
-                    @empty
-                        <tr>
-                            <td colspan="5" class="px-4 py-6 text-center text-gray-400 text-sm">
-                                No has agregado productos a esta venta aún.
-                            </td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200/60 text-xs">
+                        @forelse($items as $id => $item)
+                            <tr wire:key="item-{{ $id }}" class="hover:bg-indigo-100/30 transition-colors">
+                                <td class="px-4 py-3 font-semibold text-slate-900">{{ $item['nombre'] }}</td>
+                                <td class="px-4 py-3 text-center text-slate-600 font-medium">$ {{ number_format($item['precio_unitario'], 2) }}</td>
+                                <td class="px-4 py-3 text-center">
+                                    <input 
+                                        type="number" 
+                                        min="1" 
+                                        value="{{ $item['cantidad'] }}" 
+                                        wire:change="actualizarCantidad({{ $id }}, $event.target.value)"
+                                        class="w-16 text-center bg-slate-50 border-slate-300 rounded-lg p-1 text-xs font-bold text-slate-800"
+                                    >
+                                </td>
+                                <td class="px-4 py-3 text-right font-black text-slate-900">$ {{ number_format($item['subtotal'], 2) }}</td>
+                                <td class="px-4 py-3 text-center">
+                                    <button wire:click="quitarProducto({{ $id }})" class="text-red-700 hover:text-red-900 bg-red-100/80 hover:bg-red-200 px-2.5 py-1 rounded-md text-[11px] font-bold transition-colors cursor-pointer">
+                                        Quitar
+                                    </button>
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="5" class="px-4 py-8 text-center text-slate-400">
+                                    <p class="text-xs font-medium text-slate-500">No has agregado productos a esta venta aún. Haz clic en las tarjetas de arriba o usa el buscador.</p>
+                                </td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 
@@ -272,23 +339,23 @@ new class extends Component
     <div class="space-y-6">
 
         <!-- Formulario del Cliente y Entrega -->
-        <div class="bg-white p-6 rounded-lg shadow-sm space-y-4">
-            <h3 class="text-lg font-bold text-gray-800 border-b pb-2">2. Datos del Cliente</h3>
+        <div class="bg-slate-100/70 border border-slate-200/60 p-6 rounded-xl shadow-sm space-y-4">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700 border-b border-slate-200/80 pb-3">2. Datos del Cliente</h3>
 
             <div>
-                <x-input-label value="Nombre del Cliente *" />
-                <x-text-input type="text" wire:model="cliente_nombre" class="w-full mt-1" placeholder="Ej: Juan Pérez" />
-                @error('cliente_nombre') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                <x-input-label value="Nombre del Cliente *" class="text-xs font-bold uppercase tracking-wider text-slate-600 mb-1" />
+                <x-text-input type="text" wire:model="cliente_nombre" class="w-full mt-1 bg-slate-50 border-slate-300/80 focus:border-indigo-500 text-xs text-slate-800 rounded-lg" placeholder="Ej: Juan Pérez" />
+                @error('cliente_nombre') <span class="text-red-600 text-xs font-semibold block mt-1">{{ $message }}</span> @enderror
             </div>
 
-            <div class="grid grid-cols-2 gap-2">
+            <div class="grid grid-cols-2 gap-3">
                 <div>
-                    <x-input-label value="Teléfono" />
-                    <x-text-input type="text" wire:model="cliente_telefono" class="w-full mt-1" placeholder="099123456" />
+                    <x-input-label value="Teléfono" class="text-xs font-bold uppercase tracking-wider text-slate-600 mb-1" />
+                    <x-text-input type="text" wire:model="cliente_telefono" class="w-full mt-1 bg-slate-50 border-slate-300/80 text-xs text-slate-800 rounded-lg" placeholder="099123456" />
                 </div>
                 <div>
-                    <x-input-label value="Tipo de Entrega" />
-                    <select wire:model.live="tipo_entrega" class="w-full mt-1 border-gray-300 rounded-md shadow-sm text-sm">
+                    <x-input-label value="Tipo de Entrega" class="text-xs font-bold uppercase tracking-wider text-slate-600 mb-1" />
+                    <select wire:model.live="tipo_entrega" class="w-full mt-1 bg-slate-50 border-slate-300/80 rounded-lg shadow-sm text-xs font-semibold text-slate-800 focus:border-indigo-500">
                         <option value="retiro">Retira en Local</option>
                         <option value="flete">Envío / Flete</option>
                     </select>
@@ -296,27 +363,27 @@ new class extends Component
             </div>
 
             @if($tipo_entrega === 'flete')
-                <div class="space-y-2 bg-gray-50 p-3 rounded-md">
+                <div class="space-y-3 bg-slate-200/50 p-3.5 rounded-xl border border-slate-200/60">
                     <div>
-                        <x-input-label value="Dirección de Envío" />
-                        <x-text-input type="text" wire:model="cliente_direccion" class="w-full mt-1" placeholder="Calle y número" />
+                        <x-input-label value="Dirección de Envío" class="text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1" />
+                        <x-text-input type="text" wire:model="cliente_direccion" class="w-full mt-1 bg-slate-50 border-slate-300/80 text-xs text-slate-800 rounded-lg" placeholder="Calle y número" />
                     </div>
                     <div>
-                        <x-input-label value="Costo del Flete ($)" />
-                        <x-text-input type="number" step="0.01" wire:model.live="costo_flete" class="w-full mt-1" />
+                        <x-input-label value="Costo del Flete ($)" class="text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1" />
+                        <x-text-input type="number" step="0.01" wire:model.live="costo_flete" class="w-full mt-1 bg-slate-50 border-slate-300/80 text-xs text-slate-800 rounded-lg" />
                     </div>
                 </div>
             @endif
         </div>
 
         <!-- Método de Pago y Resumen Final -->
-        <div class="bg-white p-6 rounded-lg shadow-sm space-y-4">
-            <h3 class="text-lg font-bold text-gray-800 border-b pb-2">3. Pago y Confirmación</h3>
+        <div class="bg-slate-100/70 border border-slate-200/60 p-6 rounded-xl shadow-sm space-y-4">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700 border-b border-slate-200/80 pb-3">3. Pago y Confirmación</h3>
 
-            <div class="grid grid-cols-2 gap-2">
+            <div class="grid grid-cols-2 gap-3">
                 <div>
-                    <x-input-label value="Método de Pago" />
-                    <select wire:model.live="metodo_pago" class="w-full mt-1 border-gray-300 rounded-md shadow-sm text-sm">
+                    <x-input-label value="Método de Pago" class="text-xs font-bold uppercase tracking-wider text-slate-600 mb-1" />
+                    <select wire:model.live="metodo_pago" class="w-full mt-1 bg-slate-50 border-slate-300/80 rounded-lg shadow-sm text-xs font-semibold text-slate-800 focus:border-indigo-500">
                         <option value="Contado">Contado / Efectivo</option>
                         <option value="Transferencia">Transferencia</option>
                         <option value="Tarjeta">Tarjeta de Crédito</option>
@@ -326,36 +393,36 @@ new class extends Component
 
                 @if($metodo_pago === 'Tarjeta')
                     <div>
-                        <x-input-label value="Cuotas" />
-                        <x-text-input type="number" min="1" wire:model="cuotas" class="w-full mt-1" />
+                        <x-input-label value="Cuotas" class="text-xs font-bold uppercase tracking-wider text-slate-600 mb-1" />
+                        <x-text-input type="number" min="1" wire:model="cuotas" class="w-full mt-1 bg-slate-50 border-slate-300/80 text-xs text-slate-800 rounded-lg" />
                     </div>
                 @endif
             </div>
 
             <div>
-                <x-input-label value="Descuento ($)" />
-                <x-text-input type="number" step="0.01" wire:model.live="descuento" class="w-full mt-1" placeholder="0.00" />
+                <x-input-label value="Descuento ($)" class="text-xs font-bold uppercase tracking-wider text-slate-600 mb-1" />
+                <x-text-input type="number" step="0.01" wire:model.live="descuento" class="w-full mt-1 bg-slate-50 border-slate-300/80 text-xs text-slate-800 rounded-lg" placeholder="0.00" />
             </div>
 
             <!-- Resumen Total -->
-            <div class="bg-indigo-50 p-4 rounded-lg space-y-2 border border-indigo-100">
-                <div class="flex justify-between text-sm text-gray-600">
+            <div class="bg-slate-200/50 p-4 rounded-xl space-y-2 border border-slate-200/60">
+                <div class="flex justify-between text-xs text-slate-600 font-medium">
                     <span>Subtotal Productos:</span>
-                    <span>$ {{ number_format($this->subtotalProductos, 2) }}</span>
+                    <span class="font-bold text-slate-800">$ {{ number_format($this->subtotalProductos, 2) }}</span>
                 </div>
                 @if($tipo_entrega === 'flete')
-                    <div class="flex justify-between text-sm text-gray-600">
+                    <div class="flex justify-between text-xs text-slate-600 font-medium">
                         <span>Flete:</span>
-                        <span>$ {{ number_format((float)$costo_flete, 2) }}</span>
+                        <span class="font-bold text-slate-800">$ {{ number_format((float)$costo_flete, 2) }}</span>
                     </div>
                 @endif
                 @if((float)$descuento > 0)
-                    <div class="flex justify-between text-sm text-red-600">
+                    <div class="flex justify-between text-xs text-red-700 font-semibold">
                         <span>Descuento:</span>
                         <span>-$ {{ number_format((float)$descuento, 2) }}</span>
                     </div>
                 @endif
-                <div class="flex justify-between text-xl font-bold text-indigo-900 border-t pt-2 border-indigo-200">
+                <div class="flex justify-between text-lg font-black text-indigo-900 border-t border-slate-300/80 pt-2.5">
                     <span>TOTAL:</span>
                     <span>$ {{ number_format($this->totalFinal, 2) }}</span>
                 </div>
@@ -364,7 +431,7 @@ new class extends Component
             <button 
                 wire:click="guardarVenta" 
                 wire:loading.attr="disabled"
-                class="w-full py-3 bg-indigo-600 text-white font-bold rounded-md hover:bg-indigo-700 shadow-md transition-colors"
+                class="w-full py-3 bg-indigo-700 hover:bg-indigo-800 text-white font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer"
             >
                 <span wire:loading.remove>Confirmar y Registrar Venta</span>
                 <span wire:loading>Procesando Venta...</span>

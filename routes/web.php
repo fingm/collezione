@@ -4,6 +4,7 @@ use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\ProductoController;
 use App\Http\Controllers\VentaController;
+use App\Http\Controllers\UsuarioController;
 
 Route::get('/', function () {
     return redirect()->route('login');
@@ -23,6 +24,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::resource('productos', ProductoController::class);
     Route::post('productos/{producto}/stock', [ProductoController::class, 'actualizarStock'])->name('productos.stock');
     Route::resource('ventas', VentaController::class)->only(['index', 'create', 'show']);
+    Route::resource('usuarios', usuarioController::class);
 });
 
 require __DIR__.'/auth.php';

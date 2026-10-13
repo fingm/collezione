@@ -7,6 +7,10 @@ export default {
         './vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php',
         './storage/framework/views/*.php',
         './resources/views/**/*.blade.php',
+        './vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php',
+        './vendor/livewire/livewire/src/Features/SupportPagination/views/*.blade.php', // Add esta línea
+        './storage/framework/views/*.php',
+        './resources/views/**/*.blade.php',
     ],
 
     theme: {
