@@ -19,12 +19,7 @@
                 </div>
             @endif
 
-            <!-- Filtro de Búsqueda -->
-            <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6 mb-6">
-                <livewire:buscar-productos />
-            </div>
-
-    
+            <livewire:index-productos />
 
         </div>
     </div>

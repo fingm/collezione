@@ -1,3 +1,33 @@
+<?php
+
+use App\Models\Producto;
+use Livewire\Component;
+use Livewire\WithPagination;
+
+new class extends Component
+{
+    use WithPagination;
+
+    public $buscar = '';
+
+    public function updatingBuscar()
+    {
+        $this->resetPage();
+    }
+
+    public function with(): array
+    {
+        return [
+            'productos' => Producto::when($this->buscar, function ($query) {
+                return $query->where('nombre', 'like', '%' . $this->buscar . '%')
+                             ->orWhere('marca', 'like', '%' . $this->buscar . '%')
+                             ->orWhere('modelo', 'like', '%' . $this->buscar . '%');
+            })->latest()->paginate(10),
+        ];
+    }
+};
+?>
+
 <div>
     <!-- Filtro de Búsqueda Reactivo -->
     <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6 mb-6">

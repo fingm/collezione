@@ -7,26 +7,10 @@ use App\Models\Producto;
 
 class ProductoController extends Controller
 {
-/**
-     * Muestra el listado de productos.
-     */
+
     public function index(Request $request)
     {
-        if($request->get('buscar')){
-            // Búsqueda opcional por nombre, marca o modelo
-            $buscar = $request->get('buscar');
-
-            $productos = Producto::when($buscar, function ($query, $buscar) {
-                return $query->where('nombre', 'like', "%{$buscar}%")
-                            ->orWhere('marca', 'like', "%{$buscar}%")
-                            ->orWhere('modelo', 'like', "%{$buscar}%");
-            })->latest()->paginate(10); // Paginación de 10 en 10
-        }else{
-            $productos = Producto::get();
-            $buscar = NULL;
-        }
-
-        return view('productos.index', compact('productos', 'buscar'));
+        return view('productos.index');
     }
 
     /**
