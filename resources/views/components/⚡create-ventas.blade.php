@@ -529,5 +529,31 @@ new class extends Component
         </div>
 
     </div>
+            <!-- ALERTA DE PRODUCTOS SIN STOCK O STOCK NEGATIVO -->
+        @php
+            $itemsSinStock = collect($items)->filter(function($item) {
+                return $item['stock_actual'] !== null && ($item['stock_actual'] < $item['cantidad']);
+            });
+        @endphp
 
+        @if($itemsSinStock->count() > 0)
+            <div class="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-xl shadow-xs space-y-2">
+                <div class="flex items-center gap-2 text-amber-800 font-bold text-xs">
+                    <span class="text-base">⚠️</span>
+                    <span>Aviso: Venta por Encargo / Stock Insuficiente</span>
+                </div>
+                <p class="text-[11px] text-amber-700 leading-relaxed">
+                    Los siguientes productos no tienen stock suficiente disponible. La venta se registrará normalmente y el saldo del inventario quedará en negativo:
+                </p>
+                <ul class="list-disc list-inside text-[11px] font-semibold text-amber-900 space-y-0.5 pl-1">
+                    @foreach($itemsSinStock as $itemSin)
+                        <li>
+                            <span class="font-bold">{{ $itemSin['nombre'] }}</span> 
+                            (Stock actual: <span class="text-red-700 font-black">{{ $itemSin['stock_actual'] }}</span> | Solicitado: {{ $itemSin['cantidad'] }})
+                        </li>
+                    @endforeach
+                </ul>
+            </div>
+        @endif
+    </div>
 </div>

@@ -98,7 +98,7 @@ new class extends Component
                                     </span>
                                 @elseif($producto->stock <= 0)
                                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100/80 text-red-800 border border-red-200">
-                                        Sin Stock (0)
+                                        Sin Stock ({{ $producto->stock }})
                                     </span>
                                 @elseif($producto->stock <= 5)
                                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100/80 text-amber-800 border border-amber-200">
