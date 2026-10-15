@@ -3,6 +3,7 @@
 use App\Models\Producto;
 use App\Models\Venta;
 use App\Models\DetalleVenta;
+use App\Models\Usuario;
 use Livewire\Component;
 use Illuminate\Support\Facades\DB;
 
@@ -15,6 +16,7 @@ new class extends Component
     public $items = [];
 
     // Datos del cliente y la transacción
+    public $cliente_id = null; // Declarado para vincular con la DB y evitar error
     public $cliente_nombre = '';
     public $cliente_telefono = '';
     public $cliente_direccion = '';
@@ -38,12 +40,12 @@ new class extends Component
             $this->items[$productoId]['subtotal'] = $this->items[$productoId]['cantidad'] * $this->items[$productoId]['precio_unitario'];
         } else {
             $this->items[$productoId] = [
-                'id' => $producto->id,
-                'nombre' => $producto->nombre,
+                'id'              => $producto->id,
+                'nombre'          => $producto->nombre,
                 'precio_unitario' => $producto->precio_venta,
-                'cantidad' => 1,
-                'subtotal' => $producto->precio_venta,
-                'stock_actual' => $producto->stock,
+                'cantidad'        => 1,
+                'subtotal'        => $producto->precio_venta,
+                'stock_actual'    => $producto->stock,
             ];
         }
 
@@ -82,6 +84,20 @@ new class extends Component
         return ($this->subtotalProductos + $flete) - (float) $this->descuento;
     }
 
+    // Método público para seleccionar el cliente y autocompletar
+    public function seleccionarCliente($id)
+    {
+        $cliente = Usuario::find($id);
+
+        if ($cliente) {
+            $this->cliente_id = $cliente->id;
+            $nombreCompleto = trim($cliente->nombre . ' ' . ($cliente->apellido ?? ''));
+            $this->cliente_nombre = $nombreCompleto;
+            $this->cliente_telefono = $cliente->telefono ?? '';
+            $this->cliente_direccion = $cliente->direccion ?? '';
+        }
+    }
+
     public function agregarPrimerProducto()
     {
         if (strlen(trim($this->buscarProducto)) >= 1) {
@@ -114,10 +130,11 @@ new class extends Component
             'items.required' => 'Debes agregar al menos un producto a la venta.',
             'cliente_nombre.required' => 'El nombre del cliente es obligatorio.',
         ]);
-
+        
         DB::transaction(function () {
             // 1. Crear la Venta (Cabecera)
             $venta = Venta::create([
+                'cliente_id'        => $this->cliente_id,
                 'cliente_nombre'    => $this->cliente_nombre,
                 'cliente_telefono'  => $this->cliente_telefono,
                 'cliente_direccion' => $this->cliente_direccion,
@@ -143,7 +160,6 @@ new class extends Component
                     'subtotal'        => $item['subtotal'],
                 ]);
 
-                // Descontar stock si la entidad maneja control de stock
                 $producto = Producto::find($item['id']);
                 if ($producto && $producto->stock !== null) {
                     $producto->decrement('stock', $item['cantidad']);
@@ -186,11 +202,27 @@ new class extends Component
             ->take(12)
             ->get();
 
+        // Búsqueda en tiempo real de Usuarios filtrados por role_id
+        $clientesEncontrados = [];
+        $queryCliente = trim($this->cliente_nombre);
+
+        if ($queryCliente !== '') {
+            $clientesEncontrados = Usuario::where('role_id', 2)
+                ->where(function ($q) use ($queryCliente) {
+                    $q->where('nombre', 'like', '%' . $queryCliente . '%')
+                    ->orWhere('apellido', 'like', '%' . $queryCliente . '%')
+                    ->orWhere('telefono', 'like', '%' . $queryCliente . '%');
+                })
+                ->take(5)
+                ->get();
+        }
+
         return [
             'productosEncontrados' => $productosEncontrados,
             'catalogoProductos'    => $catalogoProductos,
+            'clientesEncontrados'  => $clientesEncontrados,
         ];
-    }
+    }  
 };
 ?>
 
@@ -201,7 +233,7 @@ new class extends Component
 
         <!-- Buscador de Productos -->
         <div class="bg-slate-100/70 border border-slate-200/60 p-6 rounded-xl shadow-sm space-y-3">
-            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700">1. Buscar o Seleccionar Productos</h3>
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700">Buscar o Seleccionar Productos</h3>
             <div class="relative">
                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <svg class="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -250,40 +282,64 @@ new class extends Component
                 <span class="text-[11px] font-semibold text-slate-500">{{ count($catalogoProductos) }} disponibles</span>
             </div>
 
-            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 pt-1">
-                @forelse($catalogoProductos as $prod)
-                    <button 
-                        type="button"
-                        wire:key="cat-prod-{{ $prod->id }}"
-                        wire:click="agregarProducto({{ $prod->id }})"
-                        class="p-3 bg-slate-50 border border-slate-200/80 hover:border-indigo-400 hover:bg-indigo-50/50 rounded-xl text-left transition-all duration-150 shadow-xs hover:shadow-sm group cursor-pointer flex flex-col justify-between"
-                    >
-                        <div>
-                            <span class="text-xs font-bold text-slate-800 group-hover:text-indigo-700 line-clamp-2 block leading-tight">
-                                {{ $prod->nombre }}
-                            </span>
-                            @if($prod->marca)
-                                <span class="text-[10px] text-slate-400 block mt-0.5">{{ $prod->marca }}</span>
-                            @endif
-                        </div>
-
-                        <div class="mt-2 pt-2 border-t border-slate-200/50 flex items-center justify-between">
-                            <span class="text-xs font-black text-indigo-700">
-                                $ {{ number_format($prod->precio_venta, 0) }}
-                            </span>
-
-                            @if($prod->stock !== null)
-                                <span class="text-[10px] font-bold px-1.5 py-0.5 rounded {{ $prod->stock > 0 ? 'bg-slate-200/70 text-slate-600' : 'bg-red-100 text-red-700' }}">
-                                    St: {{ $prod->stock }}
-                                </span>
-                            @endif
-                        </div>
-                    </button>
-                @empty
-                    <div class="col-span-full py-6 text-center text-slate-400 text-xs font-medium">
-                        No se encontraron productos coincidentes en el catálogo.
-                    </div>
-                @endforelse
+            <!-- Lista tipo tabla -->
+            <div class="overflow-x-auto border border-slate-200/60 rounded-xl max-h-64 overflow-y-auto bg-white">
+                <table class="w-full text-left border-collapse">
+                    <thead class="sticky top-0 bg-slate-200/80 z-10 text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                        <tr>
+                            <th class="px-3 py-2">Nombre</th>
+                            <th class="px-3 py-2">Modelo</th>
+                            <th class="px-3 py-2 text-center">Cantidad (Stock)</th>
+                            <th class="px-3 py-2 text-right">Importe</th>
+                            <th class="px-3 py-2 text-center">Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200/60 text-xs">
+                        @forelse($catalogoProductos as $prod)
+                            <tr 
+                                wire:key="cat-prod-{{ $prod->id }}"
+                                wire:click="agregarProducto({{ $prod->id }})"
+                                class="hover:bg-indigo-50/70 cursor-pointer transition-colors"
+                            >
+                                <td class="px-3 py-2 font-bold text-slate-800">
+                                    {{ $prod->nombre }}
+                                    @if($prod->marca)
+                                        <span class="text-[10px] text-slate-400 block font-normal">{{ $prod->marca }}</span>
+                                    @endif
+                                </td>
+                                <td class="px-3 py-2 text-slate-600 font-medium">
+                                    {{ $prod->modelo ?? '-' }}
+                                </td>
+                                <td class="px-3 py-2 text-center font-semibold">
+                                    @if($prod->stock !== null)
+                                        <span class="px-2 py-0.5 rounded text-[11px] {{ $prod->stock > 0 ? 'bg-slate-200/80 text-slate-700' : 'bg-red-100 text-red-700 font-bold' }}">
+                                            {{ $prod->stock }}
+                                        </span>
+                                    @else
+                                        <span class="text-slate-400">-</span>
+                                    @endif
+                                </td>
+                                <td class="px-3 py-2 text-right font-black text-indigo-700">
+                                    $ {{ number_format($prod->precio_venta, 2) }}
+                                </td>
+                                <td class="px-3 py-2 text-center">
+                                    <button 
+                                        type="button" 
+                                        class="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-2.5 py-1 rounded-md text-[11px] font-bold transition-colors"
+                                    >
+                                        + Agregar
+                                    </button>
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="5" class="py-6 text-center text-slate-400 text-xs font-medium">
+                                    No se encontraron productos coincidentes en el catálogo.
+                                </td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
             </div>
         </div>
 
@@ -342,9 +398,43 @@ new class extends Component
         <div class="bg-slate-100/70 border border-slate-200/60 p-6 rounded-xl shadow-sm space-y-4">
             <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700 border-b border-slate-200/80 pb-3">2. Datos del Cliente</h3>
 
-            <div>
+            <!-- Campo con Autocompletado de Cliente -->
+            <div class="relative">
                 <x-input-label value="Nombre del Cliente *" class="text-xs font-bold uppercase tracking-wider text-slate-600 mb-1" />
-                <x-text-input type="text" wire:model="cliente_nombre" class="w-full mt-1 bg-slate-50 border-slate-300/80 focus:border-indigo-500 text-xs text-slate-800 rounded-lg" placeholder="Ej: Juan Pérez" />
+                
+                <x-text-input 
+                    type="text" 
+                    wire:model.live.debounce.150ms="cliente_nombre" 
+                    class="w-full mt-1 bg-slate-50 border-slate-300/80 focus:border-indigo-500 text-xs text-slate-800 rounded-lg" 
+                    placeholder="Ej: Juan Pérez" 
+                    autocomplete="off"
+                />
+
+                <!-- Menú emergente de coincidencias de clientes -->
+                @if(!empty($clientesEncontrados) && count($clientesEncontrados) > 0 && strlen(trim($cliente_nombre)) >= 1)
+                    <div class="absolute z-50 w-full bg-white border border-slate-200 rounded-xl shadow-xl mt-1 divide-y divide-slate-100 max-h-48 overflow-y-auto">
+                        @foreach($clientesEncontrados as $c)
+                            <div 
+                                wire:key="cliente-search-{{ $c->id }}"
+                                wire:mousedown.prevent="seleccionarCliente({{ $c->id }})" 
+                                class="p-2.5 hover:bg-indigo-50 cursor-pointer transition-colors flex justify-between items-center"
+                            >
+                                <div>
+                                    <span class="font-bold text-xs text-slate-900 block">
+                                        {{ $c->nombre }} {{ $c->apellido }}
+                                    </span>
+                                    @if($c->telefono)
+                                        <span class="text-[11px] text-slate-500">Tel: {{ $c->telefono }}</span>
+                                    @endif
+                                </div>
+                                @if($c->direccion)
+                                    <span class="text-[10px] text-slate-400 max-w-[120px] truncate">{{ $c->direccion }}</span>
+                                @endif
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
+
                 @error('cliente_nombre') <span class="text-red-600 text-xs font-semibold block mt-1">{{ $message }}</span> @enderror
             </div>
 

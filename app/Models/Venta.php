@@ -12,6 +12,7 @@ class Venta extends Model
     protected $table = 'ventas';
 
     protected $fillable = [
+        'cliente_id',
         'cliente_nombre',
         'cliente_telefono',
         'cliente_direccion',
@@ -54,5 +55,10 @@ class Venta extends Model
         return $this->belongsToMany(Producto::class, 'detalle_venta', 'venta_id', 'producto_id')
                     ->withPivot('cantidad', 'precio_unitario', 'subtotal')
                     ->withTimestamps();
+    }
+    // Relación con el Cliente (Usuario)
+    public function cliente()
+    {
+        return $this->belongsTo(Usuario::class, 'cliente_id');
     }
 }

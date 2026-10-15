@@ -64,7 +64,7 @@ class Usuario extends Authenticatable
 
     public function ventas()
     {
-        return $this->hasMany(Venta::class, 'usuario_id');
+        return $this->hasMany(Venta::class, 'cliente_id');
     }
 
     // Helpers de rol
