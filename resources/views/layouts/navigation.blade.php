@@ -18,14 +18,12 @@
                         class="text-xs font-bold uppercase tracking-wider px-3 py-2 rounded-lg transition-all {{ request()->routeIs('dashboard') ? 'bg-indigo-600/20 text-indigo-400 border-b-2 border-indigo-500' : 'text-slate-300 hover:text-slate-100 hover:bg-slate-800/60' }}">
                         {{ __('Dashboard') }}
                     </x-nav-link>
-
                     <x-nav-link 
                         :href="route('productos.index')" 
                         :active="request()->routeIs('productos.*')"
                         class="text-xs font-bold uppercase tracking-wider px-3 py-2 rounded-lg transition-all {{ request()->routeIs('productos.*') ? 'bg-indigo-600/20 text-indigo-400 border-b-2 border-indigo-500' : 'text-slate-300 hover:text-slate-100 hover:bg-slate-800/60' }}">
                         {{ __('Productos') }}
                     </x-nav-link>
-
                     <x-nav-link 
                         :href="route('ventas.index')" 
                         :active="request()->routeIs('ventas.*')"
@@ -37,6 +35,12 @@
                         :active="request()->routeIs('usuarios.*')"
                         class="text-xs font-bold uppercase tracking-wider px-3 py-2 rounded-lg transition-all {{ request()->routeIs('usuarios.*') ? 'bg-indigo-600/20 text-indigo-400 border-b-2 border-indigo-500' : 'text-slate-300 hover:text-slate-100 hover:bg-slate-800/60' }}">
                         {{ __('Usuarios') }}
+                    </x-nav-link>
+                    <x-nav-link 
+                        :href="route('envios.index')" 
+                        :active="request()->routeIs('envios.*')"
+                        class="text-xs font-bold uppercase tracking-wider px-3 py-2 rounded-lg transition-all {{ request()->routeIs('envios.*') ? 'bg-indigo-600/20 text-indigo-400 border-b-2 border-indigo-500' : 'text-slate-300 hover:text-slate-100 hover:bg-slate-800/60' }}">
+                        {{ __('Envios') }}
                     </x-nav-link>
                 </div>
             </div>
@@ -120,6 +124,12 @@
                 :active="request()->routeIs('usuarios.*')"
                 class="text-xs font-bold uppercase rounded-lg {{ request()->routeIs('usuarios.*') ? 'bg-indigo-600/30 text-indigo-400' : 'text-slate-300 hover:bg-slate-800' }}">
                 {{ __('Usuarios') }}
+            </x-responsive-nav-link>
+            <x-responsive-nav-link 
+                :href="route('envios.index')" 
+                :active="request()->routeIs('envios.*')"
+                class="text-xs font-bold uppercase rounded-lg {{ request()->routeIs('envios.*') ? 'bg-indigo-600/30 text-indigo-400' : 'text-slate-300 hover:bg-slate-800' }}">
+                {{ __('Envios') }}
             </x-responsive-nav-link>
         </div>
 

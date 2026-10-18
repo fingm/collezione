@@ -4,6 +4,8 @@ use App\Models\Producto;
 use App\Models\Venta;
 use App\Models\DetalleVenta;
 use App\Models\Usuario;
+use App\Models\Direccion;
+use App\Models\Envio;
 use Livewire\Component;
 use Illuminate\Support\Facades\DB;
 
@@ -16,7 +18,7 @@ new class extends Component
     public $items = [];
 
     // Datos del cliente y la transacción
-    public $cliente_id = null; // Declarado para vincular con la DB y evitar error
+    public $cliente_id = null;
     public $cliente_nombre = '';
     public $cliente_telefono = '';
     public $cliente_direccion = '';
@@ -27,6 +29,21 @@ new class extends Component
     public $descuento = 0;
     public $notas = '';
 
+    // Manejo de direcciones y envíos
+    public $direccion_id = null;        // ID de la dirección seleccionada si el cliente ya existe
+    public $nueva_direccion = false;    // Toggle para forzar la creación de una dirección nueva
+    
+    // Campos detallados para una nueva dirección (alineados a la tabla 'direcciones')
+    public $direccion_calle = '';
+    public $direccion_numero = '';
+    public $direccion_apartamento = '';
+    public $direccion_alias  = '';
+    public $direccion_esquina = '';
+    public $direccion_barrio = '';
+    public $direccion_ciudad = 'Maldonado';
+    public $direccion_departamento = 'Maldonado';
+    public $direccion_indicaciones = '';
+
     // Agregar producto al carrito temporal
     public function agregarProducto($productoId)
     {
@@ -34,7 +51,6 @@ new class extends Component
 
         if (!$producto) return;
 
-        // Si el producto ya está en el carrito, incrementamos la cantidad
         if (isset($this->items[$productoId])) {
             $this->items[$productoId]['cantidad']++;
             $this->items[$productoId]['subtotal'] = $this->items[$productoId]['cantidad'] * $this->items[$productoId]['precio_unitario'];
@@ -49,7 +65,7 @@ new class extends Component
             ];
         }
 
-        $this->buscarProducto = ''; // Limpia el buscador
+        $this->buscarProducto = '';
     }
 
     // Modificar cantidad directamente en el carrito
@@ -87,15 +103,30 @@ new class extends Component
     // Método público para seleccionar el cliente y autocompletar
     public function seleccionarCliente($id)
     {
-        $cliente = Usuario::find($id);
+        $cliente = Usuario::with('direcciones')->find($id);
 
         if ($cliente) {
             $this->cliente_id = $cliente->id;
-            $nombreCompleto = trim($cliente->nombre . ' ' . ($cliente->apellido ?? ''));
-            $this->cliente_nombre = $nombreCompleto;
+            $this->cliente_nombre = trim($cliente->nombre . ' ' . ($cliente->apellido ?? ''));
             $this->cliente_telefono = $cliente->telefono ?? '';
-            $this->cliente_direccion = $cliente->direccion ?? '';
+            
+            if ($cliente->direcciones && $cliente->direcciones->count() > 0) {
+                $dirPrincipal = $cliente->direcciones->where('es_principal', true)->first() ?? $cliente->direcciones->first();
+                $this->direccion_id = $dirPrincipal->id;
+                $this->nueva_direccion = false;
+            } else {
+                $this->direccion_id = null;
+                $this->nueva_direccion = true;
+            }
         }
+    }
+
+    // Si el usuario edita manualmente el input del nombre, desvinculamos el ID del cliente previo
+    public function updatedClienteNombre()
+    {
+        $this->cliente_id = null;
+        $this->direccion_id = null;
+        $this->nueva_direccion = true;
     }
 
     public function agregarPrimerProducto()
@@ -121,18 +152,36 @@ new class extends Component
     public function guardarVenta()
     {
         $this->validate([
-            'cliente_nombre' => 'required|string|max:255',
-            'metodo_pago'    => 'required|string',
-            'items'          => 'required|array|min:1',
-            'costo_flete'    => 'nullable|numeric|min:0',
-            'descuento'      => 'nullable|numeric|min:0',
+            'cliente_nombre'  => 'required|string|max:255',
+            'metodo_pago'     => 'required|string',
+            'items'           => 'required|array|min:1',
+            'costo_flete'     => 'nullable|numeric|min:0',
+            'descuento'       => 'nullable|numeric|min:0',
+            'direccion_calle' => $this->tipo_entrega === 'flete' && ($this->nueva_direccion || !$this->cliente_id) ? 'required|string|max:255' : 'nullable',
         ], [
-            'items.required' => 'Debes agregar al menos un producto a la venta.',
-            'cliente_nombre.required' => 'El nombre del cliente es obligatorio.',
+            'items.required'           => 'Debes agregar al menos un producto a la venta.',
+            'cliente_nombre.required'  => 'El nombre del cliente es obligatorio.',
+            'direccion_calle.required' => 'La calle / dirección es obligatoria para el envío.',
         ]);
         
         DB::transaction(function () {
-            // 1. Crear la Venta (Cabecera)
+            // 1. Garantizar la existencia del usuario si no fue seleccionado previamente
+            if (!$this->cliente_id && !empty(trim($this->cliente_nombre))) {
+                $partesNombre = explode(' ', trim($this->cliente_nombre), 2);
+                
+                $nuevoUsuario = Usuario::create([
+                    'nombre'   => $partesNombre[0],
+                    'apellido' => $partesNombre[1] ?? '',
+                    'telefono' => $this->cliente_telefono ?? null,
+                    'email'    => 'cliente_' . time() . '_' . rand(100, 999) . '@pos.local',
+                    'password' => bcrypt('12345678'),
+                    'role_id'  => 2, // Rol de Cliente
+                ]);
+
+                $this->cliente_id = $nuevoUsuario->id;
+            }
+
+            // 2. Crear la Venta (Cabecera)
             $venta = Venta::create([
                 'cliente_id'        => $this->cliente_id,
                 'cliente_nombre'    => $this->cliente_nombre,
@@ -150,7 +199,36 @@ new class extends Component
                 'notas'             => $this->notas,
             ]);
 
-            // 2. Crear cada DetalleVenta y descontar stock
+            // 3. Procesar Dirección y Envío (si aplica Flete)
+            if ($this->tipo_entrega === 'flete') {
+                $dirId = $this->direccion_id;
+
+                if ($this->nueva_direccion || !$dirId) {
+                    $direccionCreada = Direccion::create([
+                        'usuario_id'    => $this->cliente_id,
+                        'alias'         => $this->direccion_alias,
+                        'direccion'     => $this->direccion_calle,
+                        'numero_puerta' => $this->direccion_numero,
+                        'apartamento'   => $this->direccion_apartamento,
+                        'esquina'       => $this->direccion_esquina,
+                        'barrio'        => $this->direccion_barrio,
+                        'ciudad'        => $this->direccion_ciudad ?? 'Maldonado',
+                        'departamento'  => $this->direccion_departamento ?? 'Maldonado',
+                        'indicaciones'  => $this->direccion_indicaciones,
+                    ]);
+                    $dirId = $direccionCreada->id;
+                }
+
+                Envio::create([
+                    'venta_id'      => $venta->id,
+                    'direccion_id'  => $dirId,
+                    'estado'        => 'pendiente',
+                    'fecha_pactada' => now()->toDateString(),
+                    'notas_envio'   => $this->notas,
+                ]);
+            }
+
+            // 4. Crear cada DetalleVenta y actualizar Stock
             foreach ($this->items as $item) {
                 DetalleVenta::create([
                     'venta_id'        => $venta->id,
@@ -188,7 +266,6 @@ new class extends Component
                 ->get();
         }
 
-        // Catálogo de productos activos disponibles para elegir directamente
         $catalogoProductos = Producto::where('activo', true)
             ->when(trim($this->buscarProducto) !== '', function ($q) {
                 $query = trim($this->buscarProducto);
@@ -202,12 +279,12 @@ new class extends Component
             ->take(12)
             ->get();
 
-        // Búsqueda en tiempo real de Usuarios filtrados por role_id
         $clientesEncontrados = [];
         $queryCliente = trim($this->cliente_nombre);
 
-        if ($queryCliente !== '') {
-            $clientesEncontrados = Usuario::where('role_id', 2)
+        if ($queryCliente !== '' && !$this->cliente_id) {
+            $clientesEncontrados = Usuario::with('direcciones')
+                ->where('role_id', 2)
                 ->where(function ($q) use ($queryCliente) {
                     $q->where('nombre', 'like', '%' . $queryCliente . '%')
                     ->orWhere('apellido', 'like', '%' . $queryCliente . '%')
@@ -427,9 +504,6 @@ new class extends Component
                                         <span class="text-[11px] text-slate-500">Tel: {{ $c->telefono }}</span>
                                     @endif
                                 </div>
-                                @if($c->direccion)
-                                    <span class="text-[10px] text-slate-400 max-w-[120px] truncate">{{ $c->direccion }}</span>
-                                @endif
                             </div>
                         @endforeach
                     </div>
@@ -453,17 +527,88 @@ new class extends Component
             </div>
 
             @if($tipo_entrega === 'flete')
-                <div class="space-y-3 bg-slate-200/50 p-3.5 rounded-xl border border-slate-200/60">
-                    <div>
-                        <x-input-label value="Dirección de Envío" class="text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1" />
-                        <x-text-input type="text" wire:model="cliente_direccion" class="w-full mt-1 bg-slate-50 border-slate-300/80 text-xs text-slate-800 rounded-lg" placeholder="Calle y número" />
-                    </div>
+                <div class="space-y-4 bg-slate-200/50 p-4 rounded-xl border border-slate-200/60 mt-3">
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-slate-700 border-b border-slate-300/60 pb-2">
+                        Detalles del Envío
+                    </h4>
+
+                    <!-- 1. Si el cliente existe y tiene direcciones guardadas -->
+                    @if($cliente_id)
+                        @php
+                            $clienteSel = Usuario::with('direcciones')->find($cliente_id);
+                            $direccionesCliente = $clienteSel ? $clienteSel->direcciones : collect();
+                        @endphp
+
+                        @if($direccionesCliente->count() > 0 && !$nueva_direccion)
+                            <div>
+                                <x-input-label value="Seleccionar Dirección del Cliente" class="text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1" />
+                                <select wire:model.live="direccion_id" class="w-full bg-slate-50 border-slate-300/80 rounded-lg text-xs text-slate-800 focus:border-indigo-500">
+                                    @foreach($direccionesCliente as $dir)
+                                        <option value="{{ $dir->id }}">
+                                            {{ $dir->alias ? '['.$dir->alias.'] ' : '' }}{{ $dir->direccion }} {{ $dir->numero_puerta }} 
+                                            {{ $dir->barrio ? '- B° '.$dir->barrio : '' }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                                <button type="button" wire:click="$set('nueva_direccion', true)" class="text-indigo-600 hover:text-indigo-800 text-[11px] font-bold mt-1.5 inline-block">
+                                    + Agregar una nueva dirección para este cliente
+                                </button>
+                            </div>
+                        @else
+                            <div class="flex justify-between items-center">
+                                <span class="text-xs font-bold text-slate-700">Nueva Dirección</span>
+                                @if($direccionesCliente->count() > 0)
+                                    <button type="button" wire:click="$set('nueva_direccion', false)" class="text-xs text-slate-500 underline font-semibold">
+                                        Usar dirección guardada
+                                    </button>
+                                @endif
+                            </div>
+                        @endif
+                    @endif
+
+                    <!-- 2. Formulario de Nueva Dirección -->
+                    @if(!$cliente_id || $nueva_direccion || (isset($direccionesCliente) && $direccionesCliente->count() === 0))
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <div class="col-span-2">
+                                <x-input-label value="Alias" class="text-[10px] font-bold uppercase tracking-wider text-slate-600" />
+                                <x-text-input type="text" wire:model="direccion_alias" class="w-full mt-1 bg-slate-50 border-slate-300/80 text-xs text-slate-800 rounded-lg" placeholder="Casa" />
+                            </div>
+                            <div class="col-span-2">
+                                <x-input-label value="Calle / Vía *" class="text-[10px] font-bold uppercase tracking-wider text-slate-600" />
+                                <x-text-input type="text" wire:model="direccion_calle" class="w-full mt-1 bg-slate-50 border-slate-300/80 text-xs text-slate-800 rounded-lg" placeholder="Ej: Av. Gorlero" />
+                                @error('direccion_calle') <span class="text-red-600 text-[10px] block mt-0.5">{{ $message }}</span> @enderror
+                            </div>
+                            <div>
+                                <x-input-label value="Nº Puerta" class="text-[10px] font-bold uppercase tracking-wider text-slate-600" />
+                                <x-text-input type="text" wire:model="direccion_numero" class="w-full mt-1 bg-slate-50 border-slate-300/80 text-xs text-slate-800 rounded-lg" placeholder="1234" />
+                            </div>
+                            <div>
+                                <x-input-label value="Apto / Bis" class="text-[10px] font-bold uppercase tracking-wider text-slate-600" />
+                                <x-text-input type="text" wire:model="direccion_apartamento" class="w-full mt-1 bg-slate-50 border-slate-300/80 text-xs text-slate-800 rounded-lg" placeholder="Apto 201" />
+                            </div>
+                            <div>
+                                <x-input-label value="Esquina" class="text-[10px] font-bold uppercase tracking-wider text-slate-600" />
+                                <x-text-input type="text" wire:model="direccion_esquina" class="w-full mt-1 bg-slate-50 border-slate-300/80 text-xs text-slate-800 rounded-lg" placeholder="esq. Calle 27" />
+                            </div>
+                            <div>
+                                <x-input-label value="Barrio" class="text-[10px] font-bold uppercase tracking-wider text-slate-600" />
+                                <x-text-input type="text" wire:model="direccion_barrio" class="w-full mt-1 bg-slate-50 border-slate-300/80 text-xs text-slate-800 rounded-lg" placeholder="Centro" />
+                            </div>
+                            <div class="col-span-2">
+                                <x-input-label value="Indicaciones para el Flete" class="text-[10px] font-bold uppercase tracking-wider text-slate-600" />
+                                <x-text-input type="text" wire:model="direccion_indicaciones" class="w-full mt-1 bg-slate-50 border-slate-300/80 text-xs text-slate-800 rounded-lg" placeholder="Ej: Portón verde / Timbre roto" />
+                            </div>
+                        </div>
+                    @endif
+
+                    <!-- Costo del Flete -->
                     <div>
                         <x-input-label value="Costo del Flete ($)" class="text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1" />
                         <x-text-input type="number" step="0.01" wire:model.live="costo_flete" class="w-full mt-1 bg-slate-50 border-slate-300/80 text-xs text-slate-800 rounded-lg" />
                     </div>
                 </div>
             @endif
+
         </div>
 
         <!-- Método de Pago y Resumen Final -->
@@ -529,31 +674,31 @@ new class extends Component
         </div>
 
     </div>
-            <!-- ALERTA DE PRODUCTOS SIN STOCK O STOCK NEGATIVO -->
-        @php
-            $itemsSinStock = collect($items)->filter(function($item) {
-                return $item['stock_actual'] !== null && ($item['stock_actual'] < $item['cantidad']);
-            });
-        @endphp
 
-        @if($itemsSinStock->count() > 0)
-            <div class="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-xl shadow-xs space-y-2">
-                <div class="flex items-center gap-2 text-amber-800 font-bold text-xs">
-                    <span class="text-base">⚠️</span>
-                    <span>Aviso: Venta por Encargo / Stock Insuficiente</span>
-                </div>
-                <p class="text-[11px] text-amber-700 leading-relaxed">
-                    Los siguientes productos no tienen stock suficiente disponible. La venta se registrará normalmente y el saldo del inventario quedará en negativo:
-                </p>
-                <ul class="list-disc list-inside text-[11px] font-semibold text-amber-900 space-y-0.5 pl-1">
-                    @foreach($itemsSinStock as $itemSin)
-                        <li>
-                            <span class="font-bold">{{ $itemSin['nombre'] }}</span> 
-                            (Stock actual: <span class="text-red-700 font-black">{{ $itemSin['stock_actual'] }}</span> | Solicitado: {{ $itemSin['cantidad'] }})
-                        </li>
-                    @endforeach
-                </ul>
+    <!-- ALERTA DE PRODUCTOS SIN STOCK -->
+    @php
+        $itemsSinStock = collect($items)->filter(function($item) {
+            return $item['stock_actual'] !== null && ($item['stock_actual'] < $item['cantidad']);
+        });
+    @endphp
+
+    @if($itemsSinStock->count() > 0)
+        <div class="col-span-1 lg:col-span-3 bg-amber-50 border-l-4 border-amber-500 p-4 rounded-xl shadow-xs space-y-2">
+            <div class="flex items-center gap-2 text-amber-800 font-bold text-xs">
+                <span class="text-base">⚠️</span>
+                <span>Aviso: Venta por Encargo / Stock Insuficiente</span>
             </div>
-        @endif
-    </div>
+            <p class="text-[11px] text-amber-700 leading-relaxed">
+                Los siguientes productos no tienen stock suficiente disponible. La venta se registrará normalmente y el saldo del inventario quedará en negativo:
+            </p>
+            <ul class="list-disc list-inside text-[11px] font-semibold text-amber-900 space-y-0.5 pl-1">
+                @foreach($itemsSinStock as $itemSin)
+                    <li>
+                        <span class="font-bold">{{ $itemSin['nombre'] }}</span> 
+                        (Stock actual: <span class="text-red-700 font-black">{{ $itemSin['stock_actual'] }}</span> | Solicitado: {{ $itemSin['cantidad'] }})
+                    </li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
 </div>
