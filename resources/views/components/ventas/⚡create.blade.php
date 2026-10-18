@@ -244,8 +244,9 @@ new class extends Component
             return;
         }
 
+
         DB::transaction(function () {
-            // 1. Garantizar la existencia del usuario si no fue seleccionado previamente
+            // 1. Garantizar la existencia del usuario cliente si no fue seleccionado
             if (!$this->cliente_id && !empty(trim($this->cliente_nombre))) {
                 $partesNombre = explode(' ', trim($this->cliente_nombre), 2);
                 
@@ -261,11 +262,12 @@ new class extends Component
                 $this->cliente_id = $nuevoUsuario->id;
             }
 
-            // 2. Crear la Venta (Cabecera)
+            // 2. Crear la Venta (Cabecera) asociando el vendedor autenticado
             $metodosResumen = collect($this->pagos)->pluck('metodo_pago')->unique()->implode(' + ');
 
             $venta = Venta::create([
                 'cliente_id'        => $this->cliente_id,
+                'vendedor_id'       => auth()->id(), // <--- Asigna el ID del usuario logueado
                 'cliente_nombre'    => $this->cliente_nombre,
                 'cliente_telefono'  => $this->cliente_telefono,
                 'cliente_direccion' => $this->cliente_direccion,
@@ -279,6 +281,8 @@ new class extends Component
                 'estado'            => 'completada',
                 'notas'             => $this->notas,
             ]);
+
+  
 
             // 3. Registrar los distintos métodos de pago en 'pago_ventas'
             foreach ($this->pagos as $pago) {

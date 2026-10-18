@@ -19,8 +19,7 @@
                 </div>
             @endif
 
-            <livewire:usuarios.index
-             />       
+            <livewire:usuarios.index/>       
         
         </div>
     </div>

@@ -13,6 +13,7 @@ class Venta extends Model
 
     protected $fillable = [
         'cliente_id',
+        'vendedor_id',
         'cliente_nombre',
         'cliente_telefono',
         'cliente_direccion',
@@ -39,17 +40,12 @@ class Venta extends Model
 
     // --- RELACIONES ---
 
-    /**
-     * Relación uno a muchos hacia la tabla pivote/detalle (DetalleVenta)
-     */
+
     public function detalles()
     {
         return $this->hasMany(DetalleVenta::class, 'venta_id');
     }
 
-    /**
-     * Relación muchos a muchos hacia Productos con atributos del detalle
-     */
     public function productos()
     {
         return $this->belongsToMany(Producto::class, 'detalle_venta', 'venta_id', 'producto_id')
@@ -71,6 +67,10 @@ class Venta extends Model
     public function totalPagado()
     {
         return $this->pagos()->sum('monto');
+    }
+
+    public function vendedor(){
+        return $this->belongsTo(Usuario::class,'vendedor_id');
     }
 
 }
