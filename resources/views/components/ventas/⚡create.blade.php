@@ -6,6 +6,7 @@ use App\Models\DetalleVenta;
 use App\Models\Usuario;
 use App\Models\Direccion;
 use App\Models\Envio;
+use App\Models\PagoVenta;
 use Livewire\Component;
 use Illuminate\Support\Facades\DB;
 
@@ -24,16 +25,20 @@ new class extends Component
     public $cliente_direccion = '';
     public $tipo_entrega = 'retiro'; // 'retiro' o 'flete'
     public $costo_flete = 0;
-    public $metodo_pago = 'Contado';
-    public $cuotas = 1;
     public $descuento = 0;
     public $notas = '';
+
+    // Múltiples Métodos de Pago
+    public $pagos = [];
+    public $nuevo_metodo = 'Efectivo';
+    public $nuevo_monto = '';
+    public $nueva_referencia = '';
 
     // Manejo de direcciones y envíos
     public $direccion_id = null;        // ID de la dirección seleccionada si el cliente ya existe
     public $nueva_direccion = false;    // Toggle para forzar la creación de una dirección nueva
     
-    // Campos detallados para una nueva dirección (alineados a la tabla 'direcciones')
+    // Campos detallados para una nueva dirección
     public $direccion_calle = '';
     public $direccion_numero = '';
     public $direccion_apartamento = '';
@@ -44,6 +49,11 @@ new class extends Component
     public $direccion_departamento = 'Maldonado';
     public $direccion_indicaciones = '';
 
+    public function mount()
+    {
+        $this->pagos = [];
+    }
+
     // Agregar producto al carrito temporal
     public function agregarProducto($productoId)
     {
@@ -53,19 +63,20 @@ new class extends Component
 
         if (isset($this->items[$productoId])) {
             $this->items[$productoId]['cantidad']++;
-            $this->items[$productoId]['subtotal'] = $this->items[$productoId]['cantidad'] * $this->items[$productoId]['precio_unitario'];
+            $this->items[$productoId]['subtotal'] = $this->items[$productoId]['cantidad'] * (float) $this->items[$productoId]['precio_unitario'];
         } else {
             $this->items[$productoId] = [
                 'id'              => $producto->id,
                 'nombre'          => $producto->nombre,
-                'precio_unitario' => $producto->precio_venta,
+                'precio_unitario' => (float) $producto->precio_venta,
                 'cantidad'        => 1,
-                'subtotal'        => $producto->precio_venta,
+                'subtotal'        => (float) $producto->precio_venta,
                 'stock_actual'    => $producto->stock,
             ];
         }
 
         $this->buscarProducto = '';
+        $this->autoCompletarPagoRestante();
     }
 
     // Modificar cantidad directamente en el carrito
@@ -78,26 +89,90 @@ new class extends Component
 
         if (isset($this->items[$productoId])) {
             $this->items[$productoId]['cantidad'] = (int) $cantidad;
-            $this->items[$productoId]['subtotal'] = (int) $cantidad * $this->items[$productoId]['precio_unitario'];
+            $this->items[$productoId]['subtotal'] = (int) $cantidad * (float) $this->items[$productoId]['precio_unitario'];
         }
+
+        $this->autoCompletarPagoRestante();
     }
 
     // Quitar producto del carrito
     public function quitarProducto($productoId)
     {
         unset($this->items[$productoId]);
+        $this->autoCompletarPagoRestante();
+    }
+
+    // Recalcular el pago sugerido si cambian el flete o el descuento
+    public function updatedCostoFlete()
+    {
+        $this->autoCompletarPagoRestante();
+    }
+
+    public function updatedDescuento()
+    {
+        $this->autoCompletarPagoRestante();
+    }
+
+    public function updatedTipoEntrega()
+    {
+        $this->autoCompletarPagoRestante();
     }
 
     // Propiedades calculadas en tiempo real
     public function getSubtotalProductosProperty()
     {
-        return array_sum(array_column($this->items, 'subtotal'));
+        return (float) array_sum(array_column($this->items, 'subtotal'));
     }
 
     public function getTotalFinalProperty()
     {
         $flete = $this->tipo_entrega === 'flete' ? (float) $this->costo_flete : 0;
-        return ($this->subtotalProductos + $flete) - (float) $this->descuento;
+        return max(0, ($this->subtotalProductos + $flete) - (float) $this->descuento);
+    }
+
+    public function getTotalPagadoProperty()
+    {
+        return (float) array_sum(array_column($this->pagos, 'monto'));
+    }
+
+    public function getSaldoPendienteProperty()
+    {
+        return max(0, round($this->totalFinal - $this->totalPagado, 2));
+    }
+
+    public function getVueltoProperty()
+    {
+        return max(0, round($this->totalPagado - $this->totalFinal, 2));
+    }
+
+    // Métodos para gestionar pagos múltiples
+    public function agregarPago()
+    {
+        $monto = (float) $this->nuevo_monto;
+
+        if ($monto <= 0) return;
+
+        $this->pagos[] = [
+            'metodo_pago' => $this->nuevo_metodo,
+            'monto'       => $monto,
+            'referencia'  => $this->nueva_referencia ? trim($this->nueva_referencia) : null,
+        ];
+
+        $this->nueva_referencia = '';
+        $this->autoCompletarPagoRestante();
+    }
+
+    public function quitarPago($index)
+    {
+        unset($this->pagos[$index]);
+        $this->pagos = array_values($this->pagos);
+        $this->autoCompletarPagoRestante();
+    }
+
+    public function autoCompletarPagoRestante()
+    {
+        $saldo = $this->saldoPendiente;
+        $this->nuevo_monto = $saldo > 0 ? (string) round($saldo, 2) : '';
     }
 
     // Método público para seleccionar el cliente y autocompletar
@@ -121,7 +196,6 @@ new class extends Component
         }
     }
 
-    // Si el usuario edita manualmente el input del nombre, desvinculamos el ID del cliente previo
     public function updatedClienteNombre()
     {
         $this->cliente_id = null;
@@ -153,17 +227,23 @@ new class extends Component
     {
         $this->validate([
             'cliente_nombre'  => 'required|string|max:255',
-            'metodo_pago'     => 'required|string',
             'items'           => 'required|array|min:1',
+            'pagos'           => 'required|array|min:1',
             'costo_flete'     => 'nullable|numeric|min:0',
             'descuento'       => 'nullable|numeric|min:0',
             'direccion_calle' => $this->tipo_entrega === 'flete' && ($this->nueva_direccion || !$this->cliente_id) ? 'required|string|max:255' : 'nullable',
         ], [
             'items.required'           => 'Debes agregar al menos un producto a la venta.',
+            'pagos.required'           => 'Debes agregar al menos un método de pago.',
             'cliente_nombre.required'  => 'El nombre del cliente es obligatorio.',
             'direccion_calle.required' => 'La calle / dirección es obligatoria para el envío.',
         ]);
-        
+
+        if ($this->totalPagado < $this->totalFinal) {
+            $this->addError('pagos', 'El monto total ingresado es inferior al total de la venta.');
+            return;
+        }
+
         DB::transaction(function () {
             // 1. Garantizar la existencia del usuario si no fue seleccionado previamente
             if (!$this->cliente_id && !empty(trim($this->cliente_nombre))) {
@@ -175,13 +255,15 @@ new class extends Component
                     'telefono' => $this->cliente_telefono ?? null,
                     'email'    => 'cliente_' . time() . '_' . rand(100, 999) . '@pos.local',
                     'password' => bcrypt('12345678'),
-                    'role_id'  => 2, // Rol de Cliente
+                    'role_id'  => 2,
                 ]);
 
                 $this->cliente_id = $nuevoUsuario->id;
             }
 
             // 2. Crear la Venta (Cabecera)
+            $metodosResumen = collect($this->pagos)->pluck('metodo_pago')->unique()->implode(' + ');
+
             $venta = Venta::create([
                 'cliente_id'        => $this->cliente_id,
                 'cliente_nombre'    => $this->cliente_nombre,
@@ -189,8 +271,7 @@ new class extends Component
                 'cliente_direccion' => $this->cliente_direccion,
                 'tipo_entrega'      => $this->tipo_entrega,
                 'costo_flete'       => $this->tipo_entrega === 'flete' ? $this->costo_flete : 0,
-                'metodo_pago'       => $this->metodo_pago,
-                'cuotas'            => $this->cuotas,
+                'metodo_pago'       => $metodosResumen,
                 'subtotal'          => $this->subtotalProductos,
                 'descuento'         => $this->descuento,
                 'precio_total'      => $this->totalFinal,
@@ -199,7 +280,17 @@ new class extends Component
                 'notas'             => $this->notas,
             ]);
 
-            // 3. Procesar Dirección y Envío (si aplica Flete)
+            // 3. Registrar los distintos métodos de pago en 'pago_ventas'
+            foreach ($this->pagos as $pago) {
+                PagoVenta::create([
+                    'venta_id'    => $venta->id,
+                    'metodo_pago' => $pago['metodo_pago'],
+                    'monto'       => $pago['monto'],
+                    'referencia'  => $pago['referencia'] ?? null,
+                ]);
+            }
+
+            // 4. Procesar Dirección y Envío
             if ($this->tipo_entrega === 'flete') {
                 $dirId = $this->direccion_id;
 
@@ -228,7 +319,7 @@ new class extends Component
                 ]);
             }
 
-            // 4. Crear cada DetalleVenta y actualizar Stock
+            // 5. Crear DetalleVenta y actualizar Stock
             foreach ($this->items as $item) {
                 DetalleVenta::create([
                     'venta_id'        => $venta->id,
@@ -310,7 +401,7 @@ new class extends Component
 
         <!-- Buscador de Productos -->
         <div class="bg-slate-100/70 border border-slate-200/60 p-6 rounded-xl shadow-sm space-y-3">
-            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700">Buscar o Seleccionar Productos</h3>
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700">1. Buscar o Seleccionar Productos</h3>
             <div class="relative">
                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <svg class="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -325,7 +416,6 @@ new class extends Component
                     class="w-full pl-9 pr-4 py-2.5 text-sm bg-slate-50 border-slate-300/80 rounded-lg shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 text-slate-800 placeholder-slate-400"
                 >
 
-                <!-- Autocompletado rápido emergente -->
                 @if(!empty($productosEncontrados) && count($productosEncontrados) > 0 && strlen(trim($buscarProducto)) >= 1)
                     <div class="absolute z-50 w-full bg-slate-50 border border-slate-200 rounded-xl shadow-xl mt-1 divide-y divide-slate-200/60 max-h-60 overflow-y-auto">
                         @foreach($productosEncontrados as $p)
@@ -352,21 +442,20 @@ new class extends Component
             @error('items') <span class="text-red-600 text-xs mt-1 block font-semibold">{{ $message }}</span> @enderror
         </div>
 
-        <!-- GRID/CATÁLOGO RÁPIDO DE PRODUCTOS PARA HACER CLIC -->
+        <!-- GRID/CATÁLOGO RÁPIDO DE PRODUCTOS -->
         <div class="bg-slate-100/70 border border-slate-200/60 p-6 rounded-xl shadow-sm space-y-3">
             <div class="flex justify-between items-center border-b border-slate-200/80 pb-2">
-                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700">Catálogo Rápido (Haz Clic para Agregar)</h3>
+                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700">Catálogo Rápido</h3>
                 <span class="text-[11px] font-semibold text-slate-500">{{ count($catalogoProductos) }} disponibles</span>
             </div>
 
-            <!-- Lista tipo tabla -->
             <div class="overflow-x-auto border border-slate-200/60 rounded-xl max-h-64 overflow-y-auto bg-white">
                 <table class="w-full text-left border-collapse">
                     <thead class="sticky top-0 bg-slate-200/80 z-10 text-[11px] font-bold text-slate-600 uppercase tracking-wider">
                         <tr>
                             <th class="px-3 py-2">Nombre</th>
                             <th class="px-3 py-2">Modelo</th>
-                            <th class="px-3 py-2 text-center">Cantidad (Stock)</th>
+                            <th class="px-3 py-2 text-center">Stock</th>
                             <th class="px-3 py-2 text-right">Importe</th>
                             <th class="px-3 py-2 text-center">Acción</th>
                         </tr>
@@ -420,7 +509,7 @@ new class extends Component
             </div>
         </div>
 
-        <!-- Tabla / Lista de Productos Agregados -->
+        <!-- Tabla de Productos Agregados -->
         <div class="bg-slate-100/70 border border-slate-200/60 p-6 rounded-xl shadow-sm space-y-4">
             <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700">Detalle de la Compra</h3>
             <div class="overflow-x-auto border border-slate-200/60 rounded-xl">
@@ -458,7 +547,7 @@ new class extends Component
                         @empty
                             <tr>
                                 <td colspan="5" class="px-4 py-8 text-center text-slate-400">
-                                    <p class="text-xs font-medium text-slate-500">No has agregado productos a esta venta aún. Haz clic en las tarjetas de arriba o usa el buscador.</p>
+                                    <p class="text-xs font-medium text-slate-500">No has agregado productos a esta venta aún.</p>
                                 </td>
                             </tr>
                         @endforelse
@@ -468,14 +557,13 @@ new class extends Component
         </div>
     </div>
 
-    <!-- COLUMNA DERECHA: Datos del Cliente, Envío y Cobro (1 Columna) -->
+    <!-- COLUMNA DERECHA: Datos del Cliente, Envío y Cobro Multimedio -->
     <div class="space-y-6">
 
         <!-- Formulario del Cliente y Entrega -->
         <div class="bg-slate-100/70 border border-slate-200/60 p-6 rounded-xl shadow-sm space-y-4">
-            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700 border-b border-slate-200/80 pb-3">2. Datos del Cliente</h3>
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700 border-b border-slate-200/80 pb-3">2. Datos del Cliente y Entrega</h3>
 
-            <!-- Campo con Autocompletado de Cliente -->
             <div class="relative">
                 <x-input-label value="Nombre del Cliente *" class="text-xs font-bold uppercase tracking-wider text-slate-600 mb-1" />
                 
@@ -487,7 +575,6 @@ new class extends Component
                     autocomplete="off"
                 />
 
-                <!-- Menú emergente de coincidencias de clientes -->
                 @if(!empty($clientesEncontrados) && count($clientesEncontrados) > 0 && strlen(trim($cliente_nombre)) >= 1)
                     <div class="absolute z-50 w-full bg-white border border-slate-200 rounded-xl shadow-xl mt-1 divide-y divide-slate-100 max-h-48 overflow-y-auto">
                         @foreach($clientesEncontrados as $c)
@@ -532,7 +619,11 @@ new class extends Component
                         Detalles del Envío
                     </h4>
 
-                    <!-- 1. Si el cliente existe y tiene direcciones guardadas -->
+                    <div>
+                        <x-input-label value="Costo del Flete ($)" class="text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1" />
+                        <x-text-input type="number" step="0.01" wire:model.live.debounce.300ms="costo_flete" class="w-full bg-slate-50 border-slate-300/80 text-xs font-bold text-slate-800 rounded-lg" placeholder="0.00" />
+                    </div>
+
                     @if($cliente_id)
                         @php
                             $clienteSel = Usuario::with('direcciones')->find($cliente_id);
@@ -541,7 +632,7 @@ new class extends Component
 
                         @if($direccionesCliente->count() > 0 && !$nueva_direccion)
                             <div>
-                                <x-input-label value="Seleccionar Dirección del Cliente" class="text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1" />
+                                <x-input-label value="Seleccionar Dirección Guardada" class="text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1" />
                                 <select wire:model.live="direccion_id" class="w-full bg-slate-50 border-slate-300/80 rounded-lg text-xs text-slate-800 focus:border-indigo-500">
                                     @foreach($direccionesCliente as $dir)
                                         <option value="{{ $dir->id }}">
@@ -551,7 +642,7 @@ new class extends Component
                                     @endforeach
                                 </select>
                                 <button type="button" wire:click="$set('nueva_direccion', true)" class="text-indigo-600 hover:text-indigo-800 text-[11px] font-bold mt-1.5 inline-block">
-                                    + Agregar una nueva dirección para este cliente
+                                    + Agregar una nueva dirección
                                 </button>
                             </div>
                         @else
@@ -566,12 +657,11 @@ new class extends Component
                         @endif
                     @endif
 
-                    <!-- 2. Formulario de Nueva Dirección -->
                     @if(!$cliente_id || $nueva_direccion || (isset($direccionesCliente) && $direccionesCliente->count() === 0))
                         <div class="grid grid-cols-2 gap-2 text-xs">
                             <div class="col-span-2">
                                 <x-input-label value="Alias" class="text-[10px] font-bold uppercase tracking-wider text-slate-600" />
-                                <x-text-input type="text" wire:model="direccion_alias" class="w-full mt-1 bg-slate-50 border-slate-300/80 text-xs text-slate-800 rounded-lg" placeholder="Casa" />
+                                <x-text-input type="text" wire:model="direccion_alias" class="w-full mt-1 bg-slate-50 border-slate-300/80 text-xs text-slate-800 rounded-lg" placeholder="Casa, Trabajo, etc." />
                             </div>
                             <div class="col-span-2">
                                 <x-input-label value="Calle / Vía *" class="text-[10px] font-bold uppercase tracking-wider text-slate-600" />
@@ -579,126 +669,134 @@ new class extends Component
                                 @error('direccion_calle') <span class="text-red-600 text-[10px] block mt-0.5">{{ $message }}</span> @enderror
                             </div>
                             <div>
-                                <x-input-label value="Nº Puerta" class="text-[10px] font-bold uppercase tracking-wider text-slate-600" />
+                                <x-input-label value="N° Puerta" class="text-[10px] font-bold uppercase tracking-wider text-slate-600" />
                                 <x-text-input type="text" wire:model="direccion_numero" class="w-full mt-1 bg-slate-50 border-slate-300/80 text-xs text-slate-800 rounded-lg" placeholder="1234" />
                             </div>
                             <div>
                                 <x-input-label value="Apto / Bis" class="text-[10px] font-bold uppercase tracking-wider text-slate-600" />
                                 <x-text-input type="text" wire:model="direccion_apartamento" class="w-full mt-1 bg-slate-50 border-slate-300/80 text-xs text-slate-800 rounded-lg" placeholder="Apto 201" />
                             </div>
-                            <div>
-                                <x-input-label value="Esquina" class="text-[10px] font-bold uppercase tracking-wider text-slate-600" />
-                                <x-text-input type="text" wire:model="direccion_esquina" class="w-full mt-1 bg-slate-50 border-slate-300/80 text-xs text-slate-800 rounded-lg" placeholder="esq. Calle 27" />
-                            </div>
-                            <div>
-                                <x-input-label value="Barrio" class="text-[10px] font-bold uppercase tracking-wider text-slate-600" />
-                                <x-text-input type="text" wire:model="direccion_barrio" class="w-full mt-1 bg-slate-50 border-slate-300/80 text-xs text-slate-800 rounded-lg" placeholder="Centro" />
-                            </div>
-                            <div class="col-span-2">
-                                <x-input-label value="Indicaciones para el Flete" class="text-[10px] font-bold uppercase tracking-wider text-slate-600" />
-                                <x-text-input type="text" wire:model="direccion_indicaciones" class="w-full mt-1 bg-slate-50 border-slate-300/80 text-xs text-slate-800 rounded-lg" placeholder="Ej: Portón verde / Timbre roto" />
-                            </div>
                         </div>
                     @endif
-
-                    <!-- Costo del Flete -->
-                    <div>
-                        <x-input-label value="Costo del Flete ($)" class="text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1" />
-                        <x-text-input type="number" step="0.01" wire:model.live="costo_flete" class="w-full mt-1 bg-slate-50 border-slate-300/80 text-xs text-slate-800 rounded-lg" />
-                    </div>
                 </div>
             @endif
-
         </div>
 
-        <!-- Método de Pago y Resumen Final -->
+        <!-- Módulo de Cobro Multimedio -->
         <div class="bg-slate-100/70 border border-slate-200/60 p-6 rounded-xl shadow-sm space-y-4">
-            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700 border-b border-slate-200/80 pb-3">3. Pago y Confirmación</h3>
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700 border-b border-slate-200/80 pb-3">3. Resumen y Pagos</h3>
 
-            <div class="grid grid-cols-2 gap-3">
-                <div>
-                    <x-input-label value="Método de Pago" class="text-xs font-bold uppercase tracking-wider text-slate-600 mb-1" />
-                    <select wire:model.live="metodo_pago" class="w-full mt-1 bg-slate-50 border-slate-300/80 rounded-lg shadow-sm text-xs font-semibold text-slate-800 focus:border-indigo-500">
-                        <option value="Contado">Contado / Efectivo</option>
-                        <option value="Transferencia">Transferencia</option>
-                        <option value="Tarjeta">Tarjeta de Crédito</option>
-                        <option value="Débito">Tarjeta de Débito</option>
-                    </select>
-                </div>
-
-                @if($metodo_pago === 'Tarjeta')
-                    <div>
-                        <x-input-label value="Cuotas" class="text-xs font-bold uppercase tracking-wider text-slate-600 mb-1" />
-                        <x-text-input type="number" min="1" wire:model="cuotas" class="w-full mt-1 bg-slate-50 border-slate-300/80 text-xs text-slate-800 rounded-lg" />
-                    </div>
-                @endif
-            </div>
-
+            <!-- Descuento Global -->
             <div>
                 <x-input-label value="Descuento ($)" class="text-xs font-bold uppercase tracking-wider text-slate-600 mb-1" />
-                <x-text-input type="number" step="0.01" wire:model.live="descuento" class="w-full mt-1 bg-slate-50 border-slate-300/80 text-xs text-slate-800 rounded-lg" placeholder="0.00" />
+                <x-text-input type="number" step="0.01" wire:model.live.debounce.300ms="descuento" class="w-full bg-slate-50 border-slate-300/80 text-xs font-bold text-slate-800 rounded-lg" placeholder="0.00" />
             </div>
 
-            <!-- Resumen Total -->
-            <div class="bg-slate-200/50 p-4 rounded-xl space-y-2 border border-slate-200/60">
-                <div class="flex justify-between text-xs text-slate-600 font-medium">
+            <!-- Totales -->
+            <div class="bg-white p-4 rounded-xl border border-slate-200 space-y-2 text-xs">
+                <div class="flex justify-between text-slate-600 font-medium">
                     <span>Subtotal Productos:</span>
-                    <span class="font-bold text-slate-800">$ {{ number_format($this->subtotalProductos, 2) }}</span>
+                    <span>$ {{ number_format($this->subtotalProductos, 2) }}</span>
                 </div>
                 @if($tipo_entrega === 'flete')
-                    <div class="flex justify-between text-xs text-slate-600 font-medium">
+                    <div class="flex justify-between text-slate-600 font-medium">
                         <span>Flete:</span>
-                        <span class="font-bold text-slate-800">$ {{ number_format((float)$costo_flete, 2) }}</span>
+                        <span>$ {{ number_format((float)$costo_flete, 2) }}</span>
                     </div>
                 @endif
                 @if((float)$descuento > 0)
-                    <div class="flex justify-between text-xs text-red-700 font-semibold">
+                    <div class="flex justify-between text-emerald-600 font-medium">
                         <span>Descuento:</span>
-                        <span>-$ {{ number_format((float)$descuento, 2) }}</span>
+                        <span>- $ {{ number_format((float)$descuento, 2) }}</span>
                     </div>
                 @endif
-                <div class="flex justify-between text-lg font-black text-indigo-900 border-t border-slate-300/80 pt-2.5">
-                    <span>TOTAL:</span>
-                    <span>$ {{ number_format($this->totalFinal, 2) }}</span>
+                <div class="flex justify-between text-slate-900 font-black text-sm pt-2 border-t border-slate-200">
+                    <span>Total a Pagar:</span>
+                    <span class="text-indigo-700">$ {{ number_format($this->totalFinal, 2) }}</span>
                 </div>
             </div>
 
+            <!-- Métodos de pago agregados -->
+            <div class="space-y-2">
+                <label class="text-xs font-bold uppercase tracking-wider text-slate-700 block">Pagos Registrados</label>
+                @forelse($pagos as $index => $pago)
+                    <div wire:key="pago-{{ $index }}" class="flex justify-between items-center bg-white p-2.5 rounded-lg border border-slate-200 text-xs">
+                        <div>
+                            <span class="font-bold text-slate-800">{{ $pago['metodo_pago'] }}</span>
+                            @if(!empty($pago['referencia']))
+                                <span class="text-[10px] text-slate-400 block">Ref: {{ $pago['referencia'] }}</span>
+                            @endif
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="font-black text-slate-900">$ {{ number_format($pago['monto'], 2) }}</span>
+                            <button type="button" wire:click="quitarPago({{ $index }})" class="text-red-600 hover:text-red-800 font-bold px-1.5 py-0.5 rounded hover:bg-red-50 text-xs">
+                                ✕
+                            </button>
+                        </div>
+                    </div>
+                @empty
+                    <p class="text-[11px] text-slate-400 italic">No se ha registrado ningún pago aún.</p>
+                @endforelse
+            </div>
+
+            <!-- Formulario de nuevo pago -->
+            <div class="bg-indigo-50/50 p-3 rounded-xl border border-indigo-100 space-y-2">
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                        <x-input-label value="Método" class="text-[10px] font-bold uppercase tracking-wider text-slate-600" />
+                        <select wire:model="nuevo_metodo" class="w-full mt-1 bg-white border-slate-300 rounded-lg text-xs font-semibold text-slate-800">
+                            <option value="Efectivo">Efectivo</option>
+                            <option value="Tarjeta de Débito">Tarjeta de Débito</option>
+                            <option value="Tarjeta de Crédito">Tarjeta de Crédito</option>
+                            <option value="Transferencia">Transferencia</option>
+                            <option value="Mercado Pago">Mercado Pago</option>
+                        </select>
+                    </div>
+                    <div>
+                        <x-input-label value="Monto *" class="text-[10px] font-bold uppercase tracking-wider text-slate-600" />
+                        <x-text-input type="number" step="0.01" wire:model="nuevo_monto" class="w-full mt-1 bg-white border-slate-300 text-xs font-bold text-slate-800 rounded-lg" placeholder="0.00" />
+                    </div>
+                </div>
+                <div>
+                    <x-input-label value="N° Referencia / Comprobante (Opcional)" class="text-[10px] font-bold uppercase tracking-wider text-slate-600" />
+                    <x-text-input type="text" wire:model="nueva_referencia" class="w-full mt-1 bg-white border-slate-300 text-xs text-slate-800 rounded-lg" placeholder="Ej: #123456" />
+                </div>
+                <div class="flex gap-2 pt-1">
+                    <button type="button" wire:click="agregarPago" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded-lg text-xs transition-colors">
+                        + Agregar Pago
+                    </button>
+                    @if($this->saldoPendiente > 0)
+                        <button type="button" wire:click="autoCompletarPagoRestante" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold px-3 py-2 rounded-lg text-[11px] whitespace-nowrap transition-colors">
+                            Restante
+                        </button>
+                    @endif
+                </div>
+            </div>
+
+            <!-- Balances finales (Pendiente / Vuelto) -->
+            <div class="space-y-1 text-xs font-bold pt-2 border-t border-slate-200">
+                <div class="flex justify-between items-center {{ $this->saldoPendiente > 0 ? 'text-red-600' : 'text-slate-400' }}">
+                    <span>Saldo Restante Pendiente:</span>
+                    <span>$ {{ number_format($this->saldoPendiente, 2) }}</span>
+                </div>
+                @if($this->vuelto > 0)
+                    <div class="flex justify-between items-center text-emerald-600">
+                        <span>Vuelto a Entregar:</span>
+                        <span>$ {{ number_format($this->vuelto, 2) }}</span>
+                    </div>
+                @endif
+            </div>
+
+            @error('pagos') <span class="text-red-600 text-xs font-bold block">{{ $message }}</span> @enderror
+
+            <!-- Botón Finalizar -->
             <button 
+                type="button" 
                 wire:click="guardarVenta" 
-                wire:loading.attr="disabled"
-                class="w-full py-3 bg-indigo-700 hover:bg-indigo-800 text-white font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer"
+                class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3 rounded-xl shadow-lg hover:shadow-xl transition-all text-sm uppercase tracking-wider text-center"
             >
-                <span wire:loading.remove>Confirmar y Registrar Venta</span>
-                <span wire:loading>Procesando Venta...</span>
+                Confirmar y Registrar Venta
             </button>
         </div>
-
     </div>
-
-    <!-- ALERTA DE PRODUCTOS SIN STOCK -->
-    @php
-        $itemsSinStock = collect($items)->filter(function($item) {
-            return $item['stock_actual'] !== null && ($item['stock_actual'] < $item['cantidad']);
-        });
-    @endphp
-
-    @if($itemsSinStock->count() > 0)
-        <div class="col-span-1 lg:col-span-3 bg-amber-50 border-l-4 border-amber-500 p-4 rounded-xl shadow-xs space-y-2">
-            <div class="flex items-center gap-2 text-amber-800 font-bold text-xs">
-                <span class="text-base">⚠️</span>
-                <span>Aviso: Venta por Encargo / Stock Insuficiente</span>
-            </div>
-            <p class="text-[11px] text-amber-700 leading-relaxed">
-                Los siguientes productos no tienen stock suficiente disponible. La venta se registrará normalmente y el saldo del inventario quedará en negativo:
-            </p>
-            <ul class="list-disc list-inside text-[11px] font-semibold text-amber-900 space-y-0.5 pl-1">
-                @foreach($itemsSinStock as $itemSin)
-                    <li>
-                        <span class="font-bold">{{ $itemSin['nombre'] }}</span> 
-                        (Stock actual: <span class="text-red-700 font-black">{{ $itemSin['stock_actual'] }}</span> | Solicitado: {{ $itemSin['cantidad'] }})
-                    </li>
-                @endforeach
-            </ul>
-        </div>
-    @endif
 </div>

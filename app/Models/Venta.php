@@ -61,4 +61,16 @@ class Venta extends Model
     {
         return $this->belongsTo(Usuario::class, 'cliente_id');
     }
+
+    public function pagos()
+    {
+        return $this->hasMany(PagoVenta::class);
+    }
+
+    // Método helper útil para verificar si la venta fue cubierta por completo
+    public function totalPagado()
+    {
+        return $this->pagos()->sum('monto');
+    }
+
 }

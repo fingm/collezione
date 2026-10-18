@@ -18,7 +18,7 @@
                 </div>
             @endif
 
-            <livewire:index-ventas />
+            <livewire:ventas.index />
         </div>
     </div>
 </x-app-layout>

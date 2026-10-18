@@ -19,7 +19,7 @@
                 </div>
             @endif
 
-            <livewire:index-productos />
+            <livewire:productos.index />
 
         </div>
     </div>

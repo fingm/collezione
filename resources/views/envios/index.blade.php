@@ -4,9 +4,6 @@
             <h2 class="font-semibold text-xl text-gray-800 leading-tight">
                 {{ __('Gestión de Envios') }}
             </h2>
-            <a href="{{ route('envios.create') }}" class="px-4 py-2 bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-bold rounded-lg shadow-sm transition-colors cursor-pointer flex items-center gap-1.5">
-                + Nuevo Envio
-            </a>
         </div>
     </x-slot>
 
@@ -19,7 +16,7 @@
                 </div>
             @endif
 
-            <livewire:envio-index />
+            <livewire:envios.index />
 
         </div>
     </div>

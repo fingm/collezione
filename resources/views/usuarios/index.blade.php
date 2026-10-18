@@ -19,7 +19,8 @@
                 </div>
             @endif
 
-            <livewire:index-usuarios />       
+            <livewire:usuarios.index
+             />       
         
         </div>
     </div>

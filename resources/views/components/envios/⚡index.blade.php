@@ -364,7 +364,7 @@ new class extends Component
                 </span>
             </div>
 
-            <div class="overflow-x-auto border border-amber-200/60 rounded-xl bg-white shadow-xs max-h-72 overflow-y-auto">
+            <div class="overflow-x-auto border border-amber-200/60 rounded-xl bg-white shadow-xs">
                 <table class="w-full text-left border-collapse">
                     <thead class="sticky top-0 bg-amber-100/80 text-[11px] font-bold text-amber-900 uppercase tracking-wider z-10">
                         <tr>
