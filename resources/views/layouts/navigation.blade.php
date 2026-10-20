@@ -156,7 +156,7 @@
             </div>
 
             <div class="mt-3 space-y-1">
-                <x-responsive-nav-link :href="route('profile.edit')" class="text-xs font-medium text-slate-300 hover:bg-slate-800 rounded-lg">
+                <x-responsive-nav-link :href="route('perfil.show')" class="text-xs font-medium text-slate-300 hover:bg-slate-800 rounded-lg">
                     {{ __('Perfil') }}
                 </x-responsive-nav-link>
 

@@ -19,14 +19,20 @@
         editandoPerfil: false, 
         modalNuevaDireccion: false, 
         modalEliminarDireccion: false, 
-        formIdEliminar: null 
+        formIdEliminar: '' 
     }">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
 
-            <!-- ALERTA MENSAJES DE ESTADO -->
+            <!-- ALERTA MENSAJES DE ESTADO / ERRORES -->
             @if(session('status'))
                 <div class="bg-emerald-100 border border-emerald-300 text-emerald-800 text-xs font-bold p-4 rounded-xl shadow-xs">
                     {{ session('status') }}
+                </div>
+            @endif
+
+            @if($errors->has('error'))
+                <div class="bg-red-100 border border-red-300 text-red-800 text-xs font-bold p-4 rounded-xl shadow-xs">
+                    {{ $errors->first('error') }}
                 </div>
             @endif
 
@@ -118,7 +124,7 @@
                             </div>
 
                             <div>
-                                <x-input-label value="Correo Electrónico (Solo Lectura)" class="text-[11px] font-bold uppercase text-slate-400" />
+                                <x-input-label value="Correo Electrónico (No Modificable)" class="text-[11px] font-bold uppercase text-slate-400" />
                                 <x-text-input type="email" value="{{ $usuario->email }}" class="w-full mt-1 text-xs bg-slate-200 text-slate-500 cursor-not-allowed" disabled />
                             </div>
                         </div>
@@ -127,7 +133,7 @@
                         <div class="border-t border-slate-200/80 pt-4 mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <x-input-label value="Nueva Contraseña (Opcional)" class="text-[11px] font-bold uppercase text-slate-600" />
-                                <x-text-input type="password" name="password" class="w-full mt-1 text-xs" placeholder="Dejar en blanco para conservar la actual" />
+                                <x-text-input type="password" name="password" class="w-full mt-1 text-xs" placeholder="Mínimo 8 caracteres" />
                                 <x-input-error :messages="$errors->get('password')" class="mt-1" />
                             </div>
 
@@ -138,10 +144,10 @@
                         </div>
 
                         <div class="flex justify-end gap-2 pt-3 border-t border-slate-200/80">
-                            <button type="button" @click="editandoPerfil = false" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-lg text-xs">
+                            <button type="button" @click="editandoPerfil = false" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-lg text-xs cursor-pointer">
                                 Cancelar
                             </button>
-                            <button type="submit" class="px-4 py-2 bg-indigo-700 hover:bg-indigo-800 text-white font-bold rounded-lg text-xs shadow-xs">
+                            <button type="submit" class="px-4 py-2 bg-indigo-700 hover:bg-indigo-800 text-white font-bold rounded-lg text-xs shadow-xs cursor-pointer">
                                 Guardar Cambios
                             </button>
                         </div>
@@ -150,7 +156,7 @@
 
             </div>
 
-            <!-- BLOQUE 2: DIRECCIONES GUARDADAS EN TARJETAS -->
+            <!-- BLOQUE 2: DIRECCIONES GUARDADAS -->
             <div class="bg-slate-100/70 border border-slate-200/60 overflow-hidden shadow-sm sm:rounded-xl p-6">
                 <div class="flex justify-between items-center mb-4 pb-2 border-b border-slate-200">
                     <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500">
@@ -159,7 +165,7 @@
                     <button 
                         type="button" 
                         @click="modalNuevaDireccion = true" 
-                        class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg shadow-xs transition-colors flex items-center gap-1 cursor-pointer"
+                        class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg shadow-sm transition-colors flex items-center gap-1 cursor-pointer"
                     >
                         + Agregar Dirección
                     </button>
@@ -181,7 +187,7 @@
                                 </div>
 
                                 <p class="text-xs font-medium text-slate-700">
-                                    {{ $dir->direccion_completa }}
+                                    {{ $dir->direccion_completa ?? $dir->direccion }}
                                 </p>
 
                                 <p class="text-[11px] text-slate-500">
@@ -202,8 +208,8 @@
                                     @method('DELETE')
                                     <button 
                                         type="button" 
-                                        @click="modalEliminarDireccion = true; formIdEliminar = 'form-delete-dir-{{ $dir->id }}'" 
-                                        class="text-red-600 hover:text-red-800 text-[11px] font-bold bg-red-50 hover:bg-red-100 px-2.5 py-1 rounded-md transition-colors cursor-pointer"
+                                        @click="formIdEliminar = 'form-delete-dir-{{ $dir->id }}'; modalEliminarDireccion = true" 
+                                        class="text-red-600 hover:text-red-800 text-[11px] font-bold bg-red-50 hover:bg-red-100 px-2.5 py-1 rounded-md transition-colors cursor-pointer flex items-center gap-1"
                                     >
                                         🗑️ Eliminar
                                     </button>
@@ -218,7 +224,7 @@
                 </div>
             </div>
 
-            <!-- BLOQUE 3: HISTORIAL DE COMPRAS REALIZADAS -->
+            <!-- BLOQUE 3: HISTORIAL DE COMPRAS -->
             <div class="bg-emerald-50/40 border border-emerald-200/60 overflow-hidden shadow-sm sm:rounded-xl p-6">
                 <div class="flex justify-between items-center mb-4 pb-3 border-b border-emerald-200/80">
                     <div class="flex items-center gap-2">
@@ -282,7 +288,7 @@
                 </div>
             </div>
 
-            <!-- BLOQUE 4: VENTAS REALIZADAS (SOLO PARA VENDEDORES O ADMINS) -->
+            <!-- BLOQUE 4: VENTAS REALIZADAS (SI ES VENDEDOR O ADMIN) -->
             @if($usuario->role?->nombre === 'vendedor' || $usuario->role?->nombre === 'admin')
                 <div class="bg-indigo-50/40 border border-indigo-200/60 overflow-hidden shadow-sm sm:rounded-xl p-6">
                     <div class="flex justify-between items-center mb-4 pb-3 border-b border-indigo-200/80">
@@ -347,118 +353,111 @@
         </div>
 
         <!-- MODAL 1: AGREGAR NUEVA DIRECCIÓN -->
-        <div 
-            x-show="modalNuevaDireccion" 
-            x-cloak 
-            class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4"
-        >
-            <div @click.away="modalNuevaDireccion = false" class="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 space-y-4">
-                <div class="flex justify-between items-center border-b pb-3 border-slate-200">
-                    <h3 class="font-bold text-slate-800 text-sm uppercase">Agregar Nueva Dirección</h3>
-                    <button @click="modalNuevaDireccion = false" class="text-slate-400 hover:text-slate-600 font-bold">&times;</button>
+        <template x-teleport="body">
+            <div 
+                x-show="modalNuevaDireccion" 
+                x-cloak 
+                x-transition.opacity
+                class="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs"
+                @click.self="modalNuevaDireccion = false"
+            >
+                <div class="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 space-y-4">
+                    <div class="flex justify-between items-center border-b pb-3 border-slate-200">
+                        <h3 class="font-bold text-slate-800 text-sm uppercase">Agregar Nueva Dirección</h3>
+                        <button type="button" @click="modalNuevaDireccion = false" class="text-slate-400 hover:text-slate-600 font-bold text-lg cursor-pointer">&times;</button>
+                    </div>
+
+                    <form action="{{ route('direcciones.store') }}" method="POST" class="space-y-3 text-xs">
+                        @csrf
+                        <input type="hidden" name="usuario_id" value="{{ $usuario->id }}">
+
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <x-input-label value="Alias (ej: Casa, Oficina)" class="text-[11px]" />
+                                <x-text-input type="text" name="alias" class="w-full mt-1 text-xs" placeholder="Casa" />
+                            </div>
+                            <div>
+                                <x-input-label value="Calle / Dirección *" class="text-[11px]" />
+                                <x-text-input type="text" name="direccion_completa" class="w-full mt-1 text-xs" required placeholder="Av. Roosevelt" />
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-3 gap-3">
+                            <div>
+                                <x-input-label value="Barrio" class="text-[11px]" />
+                                <x-text-input type="text" name="barrio" class="w-full mt-1 text-xs" placeholder="San Rafael" />
+                            </div>
+                            <div>
+                                <x-input-label value="Ciudad *" class="text-[11px]" />
+                                <x-text-input type="text" name="ciudad" value="Maldonado" class="w-full mt-1 text-xs" required />
+                            </div>
+                            <div>
+                                <x-input-label value="Departamento *" class="text-[11px]" />
+                                <x-text-input type="text" name="departamento" value="Maldonado" class="w-full mt-1 text-xs" required />
+                            </div>
+                        </div>
+
+                        <div>
+                            <x-input-label value="Indicaciones para el flete" class="text-[11px]" />
+                            <x-text-input type="text" name="indicaciones" class="w-full mt-1 text-xs" placeholder="Portón gris, timbre 2" />
+                        </div>
+
+                        <div class="flex items-center gap-2 pt-1">
+                            <input type="checkbox" name="es_principal" id="es_principal_new" value="1" class="rounded border-slate-300 text-indigo-600">
+                            <label for="es_principal_new" class="text-slate-700 font-semibold">Marcar como dirección principal</label>
+                        </div>
+
+                        <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                            <button type="button" @click="modalNuevaDireccion = false" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-lg text-xs cursor-pointer">
+                                Cancelar
+                            </button>
+                            <button type="submit" class="px-4 py-2 bg-indigo-700 hover:bg-indigo-800 text-white font-bold rounded-lg text-xs shadow-xs cursor-pointer">
+                                Guardar Dirección
+                            </button>
+                        </div>
+                    </form>
                 </div>
+            </div>
+        </template>
 
-                <form action="{{ route('direcciones.store') }}" method="POST" class="space-y-3 text-xs">
-                    @csrf
-                    <input type="hidden" name="usuario_id" value="{{ $usuario->id }}">
-
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <x-input-label value="Alias (ej: Casa, Oficina)" class="text-[11px]" />
-                            <x-text-input type="text" name="alias" class="w-full mt-1 text-xs" placeholder="Casa" />
-                        </div>
-                        <div>
-                            <x-input-label value="Calle / Dirección *" class="text-[11px]" />
-                            <x-text-input type="text" name="direccion" class="w-full mt-1 text-xs" required placeholder="Av. Roosevelt" />
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-3 gap-3">
-                        <div>
-                            <x-input-label value="N° Puerta" class="text-[11px]" />
-                            <x-text-input type="text" name="numero_puerta" class="w-full mt-1 text-xs" placeholder="1234" />
-                        </div>
-                        <div>
-                            <x-input-label value="Apto / Bis / Piso" class="text-[11px]" />
-                            <x-text-input type="text" name="apartamento" class="w-full mt-1 text-xs" placeholder="Apto 201" />
-                        </div>
-                        <div>
-                            <x-input-label value="Esquina" class="text-[11px]" />
-                            <x-text-input type="text" name="esquina" class="w-full mt-1 text-xs" placeholder="Pedragosa Sierra" />
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-3 gap-3">
-                        <div>
-                            <x-input-label value="Barrio" class="text-[11px]" />
-                            <x-text-input type="text" name="barrio" class="w-full mt-1 text-xs" placeholder="San Rafael" />
-                        </div>
-                        <div>
-                            <x-input-label value="Ciudad *" class="text-[11px]" />
-                            <x-text-input type="text" name="ciudad" value="Maldonado" class="w-full mt-1 text-xs" required />
-                        </div>
-                        <div>
-                            <x-input-label value="Departamento *" class="text-[11px]" />
-                            <x-text-input type="text" name="departamento" value="Maldonado" class="w-full mt-1 text-xs" required />
-                        </div>
+        <!-- MODAL 2: CONFIRMAR ELIMINACIÓN DE DIRECCIÓN -->
+        <template x-teleport="body">
+            <div 
+                x-show="modalEliminarDireccion" 
+                x-cloak 
+                x-transition.opacity
+                class="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs"
+                @click.self="modalEliminarDireccion = false"
+            >
+                <div class="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 text-center space-y-4">
+                    <div class="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto text-xl">
+                        🗑️
                     </div>
 
                     <div>
-                        <x-input-label value="Indicaciones para el flete" class="text-[11px]" />
-                        <x-text-input type="text" name="indicaciones" class="w-full mt-1 text-xs" placeholder="Portón gris, timbre 2" />
+                        <h3 class="font-bold text-slate-800 text-base">¿Eliminar esta dirección?</h3>
+                        <p class="text-xs text-slate-500 mt-1">Esta acción borrará la dirección del perfil de forma permanente.</p>
                     </div>
 
-                    <div class="flex items-center gap-2 pt-1">
-                        <input type="checkbox" name="es_principal" id="es_principal_new" value="1" class="rounded border-slate-300 text-indigo-600">
-                        <label for="es_principal_new" class="text-slate-700 font-semibold">Marcar como dirección principal</label>
-                    </div>
-
-                    <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
-                        <button type="button" @click="modalNuevaDireccion = false" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-lg text-xs">
+                    <div class="flex justify-center gap-3 pt-2">
+                        <button 
+                            type="button" 
+                            @click="modalEliminarDireccion = false" 
+                            class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+                        >
                             Cancelar
                         </button>
-                        <button type="submit" class="px-4 py-2 bg-indigo-700 hover:bg-indigo-800 text-white font-bold rounded-lg text-xs shadow-xs">
-                            Guardar Dirección
+                        <button 
+                            type="button" 
+                            @click="if(formIdEliminar) document.getElementById(formIdEliminar).submit()" 
+                            class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs shadow-md transition-colors cursor-pointer"
+                        >
+                            Sí, eliminar
                         </button>
                     </div>
-                </form>
-            </div>
-        </div>
-
-        <!-- MODAL 2: CONFIRMAR ELIMINACIÓN DE DIRECCIÓN -->
-        <div 
-            x-show="modalEliminarDireccion" 
-            x-cloak 
-            class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4"
-        >
-            <div @click.away="modalEliminarDireccion = false" class="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 text-center space-y-4">
-                <div class="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto text-xl">
-                    🗑️
-                </div>
-
-                <div>
-                    <h3 class="font-bold text-slate-800 text-base">¿Eliminar esta dirección?</h3>
-                    <p class="text-xs text-slate-500 mt-1">Esta acción borrará la dirección del perfil de forma permanente.</p>
-                </div>
-
-                <div class="flex justify-center gap-3 pt-2">
-                    <button 
-                        type="button" 
-                        @click="modalEliminarDireccion = false" 
-                        class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-colors cursor-pointer"
-                    >
-                        Cancelar
-                    </button>
-                    <button 
-                        type="button" 
-                        @click="document.getElementById(formIdEliminar).submit()" 
-                        class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs shadow-md transition-colors cursor-pointer"
-                    >
-                        Sí, eliminar
-                    </button>
                 </div>
             </div>
-        </div>
+        </template>
 
     </div>
 </x-app-layout>
