@@ -4,6 +4,7 @@ use Livewire\Component;
 use App\Models\Venta;
 use App\Models\DetalleVenta;
 use App\Models\Envio;
+use App\Models\Gasto;
 use App\Models\Producto;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -41,7 +42,7 @@ new class extends Component
         $ticketPromedio = $cantidadVentas > 0 ? $totalVentas / $cantidadVentas : 0;
         $totalRecaudadoFlete = $ventasMes->sum('costo_flete');
 
-        // 2. Cálculo de Ganancia Estimada (Subtotal Venta - Costo Productos)
+        // 2. Cálculo de Costos de Productos Vendidos y Ganancia Bruta
         $idsVentas = $ventasMes->pluck('id');
         
         $detalles = DetalleVenta::with('producto')
@@ -53,12 +54,27 @@ new class extends Component
             return $costoUnitario * $item->cantidad;
         });
 
-        // Ganancia = (Total Ventas - Fletes) - Costo de Productos
-        // (El flete se excluye o se incluye según si tenés costo de cadetería externa)
+        // Ganancia Bruta = (Subtotal de Ventas - Descuentos) - Costo Directo de Productos
         $subtotalBrutoVentas = $ventasMes->sum('subtotal') - $ventasMes->sum('descuento');
-        $gananciaNeta = $subtotalBrutoVentas - $costoTotalProductos;
+        $gananciaBruta = $subtotalBrutoVentas - $costoTotalProductos;
 
-        // 3. Envíos del Mes
+        // 3. Consultar Gastos Operativos del Mes
+        $totalGastosMes = Gasto::whereYear('fecha', $this->anioSeleccionado)
+            ->whereMonth('fecha', $this->mesSeleccionado)
+            ->sum('monto');
+
+        // Ganancia Neta Real = Ganancia Bruta - Gastos Operativos
+        $gananciaNetaReal = $gananciaBruta - $totalGastosMes;
+
+        // Desglose de Gastos por Categoría
+        $gastosPorCategoria = Gasto::select('categoria', DB::raw('SUM(monto) as total_monto'))
+            ->whereYear('fecha', $this->anioSeleccionado)
+            ->whereMonth('fecha', $this->mesSeleccionado)
+            ->groupBy('categoria')
+            ->orderByDesc('total_monto')
+            ->get();
+
+        // 4. Envíos del Mes
         $enviosMes = Envio::whereHas('venta', function ($q) use ($fechaInicio, $fechaFin) {
             $q->whereBetween('fecha_compra', [$fechaInicio, $fechaFin]);
         })->get();
@@ -67,14 +83,14 @@ new class extends Component
         $enviosEntregados = $enviosMes->where('estado', 'entregado')->count();
         $enviosPendientes = $enviosMes->whereIn('estado', ['pendiente', 'en_camino'])->count();
 
-        // 4. Métodos de Pago
+        // 5. Métodos de Pago
         $metodosPago = Venta::select('metodo_pago', DB::raw('count(*) as total'), DB::raw('sum(precio_total) as monto'))
             ->whereBetween('fecha_compra', [$fechaInicio, $fechaFin])
             ->where('estado', '!=', 'cancelada')
             ->groupBy('metodo_pago')
             ->get();
 
-        // 5. Top 5 Productos más Vendidos del Mes
+        // 6. Top 5 Productos más Vendidos del Mes
         $topProductos = DetalleVenta::select('producto_id', DB::raw('SUM(cantidad) as total_cantidad'), DB::raw('SUM(subtotal) as total_monto'))
             ->whereIn('venta_id', $idsVentas)
             ->groupBy('producto_id')
@@ -85,7 +101,10 @@ new class extends Component
 
         return [
             'totalVentas'         => $totalVentas,
-            'gananciaNeta'        => $gananciaNeta,
+            'gananciaBruta'       => $gananciaBruta,
+            'totalGastosMes'      => $totalGastosMes,
+            'gananciaNetaReal'    => $gananciaNetaReal,
+            'gastosPorCategoria'  => $gastosPorCategoria,
             'cantidadVentas'      => $cantidadVentas,
             'ticketPromedio'      => $ticketPromedio,
             'totalEnvios'         => $totalEnvios,
@@ -108,7 +127,7 @@ new class extends Component
             <h2 class="text-base font-black uppercase tracking-wider text-slate-800">
                 Resumen Ejecutivo - {{ ucfirst($nombreMes) }} {{ $anioSeleccionado }}
             </h2>
-            <p class="text-xs text-slate-500">Métricas clave de rendimiento comercial y logístico</p>
+            <p class="text-xs text-slate-500">Métricas clave de rendimiento financiero, comercial y logístico</p>
         </div>
 
         <div class="flex flex-wrap items-center gap-3">
@@ -146,7 +165,7 @@ new class extends Component
         </div>
     </div>
 
-    <!-- TARJETAS DE PRINCIPALES (KPIs) -->
+    <!-- TARJETAS PRINCIPALES DE KPIs FINANCIEROS -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         
         <!-- Total Facturado -->
@@ -159,24 +178,28 @@ new class extends Component
             <div class="p-3 bg-indigo-100 text-indigo-700 rounded-xl text-xl">💰</div>
         </div>
 
-        <!-- Ganancia Estimada -->
+        <!-- Total Gastos del Mes -->
         <div class="bg-slate-100/70 border border-slate-200/60 p-5 rounded-xl shadow-sm flex items-center justify-between">
             <div>
-                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Ganancia Bruta Est.</span>
-                <span class="text-2xl font-black text-emerald-700">$ {{ number_format($gananciaNeta, 2) }}</span>
-                <span class="text-[10px] text-slate-400 block mt-0.5">Margen sobre costo directo</span>
+                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Gastos Operativos</span>
+                <span class="text-2xl font-black text-rose-700">$ {{ number_format($totalGastosMes, 2) }}</span>
+                <span class="text-[10px] text-slate-400 block mt-0.5">Egresos registrados</span>
             </div>
-            <div class="p-3 bg-emerald-100 text-emerald-700 rounded-xl text-xl">📈</div>
+            <div class="p-3 bg-rose-100 text-rose-700 rounded-xl text-xl">💸</div>
         </div>
 
-        <!-- Ticket Promedio -->
+        <!-- Ganancia Neta Real (Ganancia Bruta - Gastos) -->
         <div class="bg-slate-100/70 border border-slate-200/60 p-5 rounded-xl shadow-sm flex items-center justify-between">
             <div>
-                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Ticket Promedio</span>
-                <span class="text-2xl font-black text-slate-800">$ {{ number_format($ticketPromedio, 2) }}</span>
-                <span class="text-[10px] text-slate-400 block mt-0.5">Promedio por venta</span>
+                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Ganancia Neta Real</span>
+                <span class="text-2xl font-black {{ $gananciaNetaReal >= 0 ? 'text-emerald-700' : 'text-red-600' }}">
+                    $ {{ number_format($gananciaNetaReal, 2) }}
+                </span>
+                <span class="text-[10px] text-slate-400 block mt-0.5">Margen neto de operación</span>
             </div>
-            <div class="p-3 bg-slate-200 text-slate-700 rounded-xl text-xl">🛒</div>
+            <div class="p-3 {{ $gananciaNetaReal >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700' }} rounded-xl text-xl">
+                {{ $gananciaNetaReal >= 0 ? '📈' : '📉' }}
+            </div>
         </div>
 
         <!-- Logística y Envíos -->
@@ -191,7 +214,7 @@ new class extends Component
 
     </div>
 
-    <!-- SECCIÓN SECUNDARIA: DETALLE DE PAGO Y TOP PRODUCTOS -->
+    <!-- SECCIÓN SECUNDARIA: MÉTODO DE PAGO, GASTOS POR CATEGORÍA Y TOP PRODUCTOS -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
         <!-- 1. Desglose de Métodos de Pago -->
@@ -220,8 +243,34 @@ new class extends Component
             </div>
         </div>
 
-        <!-- 2. Top 5 Productos más Vendidos -->
-        <div class="lg:col-span-2 bg-slate-100/70 border border-slate-200/60 p-6 rounded-xl shadow-sm space-y-4">
+        <!-- 2. Gastos por Categoría -->
+        <div class="bg-slate-100/70 border border-slate-200/60 p-6 rounded-xl shadow-sm space-y-4">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700 border-b border-slate-200/80 pb-3">
+                Egresos por Categoría
+            </h3>
+
+            <div class="space-y-3">
+                @forelse($gastosPorCategoria as $gCat)
+                    @php
+                        $porcentajeGasto = $totalGastosMes > 0 ? ($gCat->total_monto / $totalGastosMes) * 100 : 0;
+                    @endphp
+                    <div class="space-y-1">
+                        <div class="flex justify-between text-xs font-bold text-slate-800">
+                            <span>{{ $gCat->categoria }}</span>
+                            <span class="text-red-700">$ {{ number_format($gCat->total_monto, 2) }} ({{ number_format($porcentajeGasto, 1) }}%)</span>
+                        </div>
+                        <div class="w-full bg-slate-200 rounded-full h-2">
+                            <div class="bg-rose-500 h-2 rounded-full" style="width: {{ $porcentajeGasto }}%"></div>
+                        </div>
+                    </div>
+                @empty
+                    <p class="text-xs text-slate-400 text-center py-4">Sin gastos registrados en este período.</p>
+                @endforelse
+            </div>
+        </div>
+
+        <!-- 3. Top 5 Productos más Vendidos -->
+        <div class="bg-slate-100/70 border border-slate-200/60 p-6 rounded-xl shadow-sm space-y-4">
             <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700 border-b border-slate-200/80 pb-3">
                 Top 5 Productos Más Vendidos
             </h3>
@@ -230,31 +279,28 @@ new class extends Component
                 <table class="w-full text-left border-collapse">
                     <thead class="bg-slate-200/80 text-[11px] font-bold text-slate-600 uppercase tracking-wider">
                         <tr>
-                            <th class="px-4 py-2.5">Producto</th>
-                            <th class="px-4 py-2.5 text-center">Unidades Vendidas</th>
-                            <th class="px-4 py-2.5 text-right">Monto Total</th>
+                            <th class="px-3 py-2">Producto</th>
+                            <th class="px-3 py-2 text-center">Cant.</th>
+                            <th class="px-3 py-2 text-right">Total</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-200/60 text-xs">
                         @forelse($topProductos as $top)
                             <tr class="hover:bg-slate-50 transition-colors">
-                                <td class="px-4 py-3 font-bold text-slate-800">
+                                <td class="px-3 py-2.5 font-bold text-slate-800">
                                     {{ $top->producto->nombre ?? 'Producto Eliminado' }}
-                                    @if(isset($top->producto->marca))
-                                        <span class="text-[10px] text-slate-400 font-normal block">{{ $top->producto->marca }}</span>
-                                    @endif
                                 </td>
-                                <td class="px-4 py-3 text-center font-black text-indigo-700">
+                                <td class="px-3 py-2.5 text-center font-black text-indigo-700">
                                     {{ $top->total_cantidad }}
                                 </td>
-                                <td class="px-4 py-3 text-right font-bold text-slate-900">
+                                <td class="px-3 py-2.5 text-right font-bold text-slate-900">
                                     $ {{ number_format($top->total_monto, 2) }}
                                 </td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="3" class="px-4 py-6 text-center text-slate-400 text-xs">
-                                    No hay ventas registradas en el período seleccionado.
+                                <td colspan="3" class="px-3 py-6 text-center text-slate-400 text-xs">
+                                    Sin ventas en este período.
                                 </td>
                             </tr>
                         @endforelse

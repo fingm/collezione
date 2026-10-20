@@ -7,6 +7,7 @@ use App\Http\Controllers\VentaController;
 use App\Http\Controllers\UsuarioController;
 use App\Http\Controllers\DireccionController;
 use App\Http\Controllers\EnvioController;
+use App\Http\Controllers\GastoController;  
 
 Route::get('/', function () {
     return redirect()->route('login');
@@ -31,6 +32,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('/direcciones/{direccion}', [DireccionController::class, 'destroy'])->name('direcciones.destroy');
     Route::put('/direcciones/{direccion}', [DireccionController::class, 'update'])->name('direcciones.update');
     Route::resource('envios',EnvioController::class);
+    Route::resource('gastos',GastoController::class);
 });
 
 require __DIR__.'/auth.php';

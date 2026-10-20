@@ -1,13 +1,8 @@
 
 Pestaña caja:
 
-    . Ingresar gastos puntuales a mano
     . gastos automaticos por compra de productos a renzo ?
 
-
-    Afecta:
-
-    . Dashboard-> balance
 
 
 Conexion con google API:
