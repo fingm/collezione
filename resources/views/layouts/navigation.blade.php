@@ -71,7 +71,7 @@
 
                     <x-slot name="content">
                         <div class="bg-slate-800 border border-slate-700 rounded-xl shadow-xl overflow-hidden py-1">
-                            <x-dropdown-link :href="route('profile.edit')" class="text-xs font-medium text-slate-200 hover:bg-slate-700/70 hover:text-white transition-colors">
+                            <x-dropdown-link :href="route('perfil.show')" class="text-xs font-medium text-slate-200 hover:bg-slate-700/70 hover:text-white transition-colors">
                                 {{ __('Perfil') }}
                             </x-dropdown-link>
 

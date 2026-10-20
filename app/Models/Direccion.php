@@ -35,7 +35,7 @@ class Direccion extends Model
 
     public function usuario()
     {
-        return $this->belongsTo(Usuario::class, 'usuario_id');
+        return $this->belongsTo(Usuario::class, 'usuario_id')->withTrashed();
     }
 
     public function envios(){

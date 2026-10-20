@@ -8,6 +8,13 @@ use App\Http\Controllers\UsuarioController;
 use App\Http\Controllers\DireccionController;
 use App\Http\Controllers\EnvioController;
 use App\Http\Controllers\GastoController;  
+use App\Http\Controllers\PerfilController;
+
+
+Route::middleware(['auth'])->group(function () {
+    Route::get('/perfil', [PerfilController::class, 'show'])->name('perfil.show');
+    Route::put('/perfil', [PerfilController::class, 'update'])->name('perfil.update');
+});
 
 Route::get('/', function () {
     return redirect()->route('login');

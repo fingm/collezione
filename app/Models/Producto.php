@@ -4,10 +4,15 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Producto extends Model
 {
-    use HasFactory;
+    use HasFactory, SoftDeletes;
+
+    protected $table = 'productos';
+
+    protected $guarded = [];
 
     protected $fillable = [
         'nombre',
@@ -41,9 +46,15 @@ class Producto extends Model
     }
 
     public function ventas(){
-    return $this->belongsToMany(Venta::class, 'detalle_venta', 'producto_id', 'venta_id')
+        return $this->belongsToMany(Venta::class, 'detalle_venta', 'producto_id', 'venta_id')
                 ->withPivot('cantidad', 'precio_unitario', 'subtotal')
                 ->withTimestamps();
+    }
+
+    // Relación con las ventas pasadas
+    public function detallesVenta()
+    {
+        return $this->hasMany(DetalleVenta::class, 'producto_id');
     }
 
 }

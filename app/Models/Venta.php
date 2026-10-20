@@ -55,7 +55,7 @@ class Venta extends Model
     // Relación con el Cliente (Usuario)
     public function cliente()
     {
-        return $this->belongsTo(Usuario::class, 'cliente_id');
+        return $this->belongsTo(Usuario::class, 'cliente_id')->withTrashed();
     }
 
     public function pagos()
@@ -70,7 +70,7 @@ class Venta extends Model
     }
 
     public function vendedor(){
-        return $this->belongsTo(Usuario::class,'vendedor_id');
+        return $this->belongsTo(Usuario::class,'vendedor_id')->withTrashed();
     }
 
 }

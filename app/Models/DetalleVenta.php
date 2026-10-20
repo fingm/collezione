@@ -11,6 +11,8 @@ class DetalleVenta extends Model
 
     protected $table = 'detalle_venta';
 
+    protected $guarded = [];
+
     protected $fillable = [
         'venta_id',
         'producto_id',
@@ -32,6 +34,6 @@ class DetalleVenta extends Model
 
     public function producto()
     {
-        return $this->belongsTo(Producto::class, 'producto_id');
+        return $this->belongsTo(Producto::class, 'producto_id')->withTrashed();
     }
 }

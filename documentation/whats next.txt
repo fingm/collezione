@@ -18,16 +18,10 @@ Venta:
     .Borrar el + de agregar, o ponerlo al lado
 
 Producto:
-    .soft deletes
     .stock pedido cuando esta agotado y posible fecha de entrega
 
-Usuario:
-    soft deletes    
-
-Perfil propio:
-    Ver datos, editar, validar qeu no exista mail o documento    
-
 Nivel de acceso de usuarios
+
 
 Manejo de comisiones
 
