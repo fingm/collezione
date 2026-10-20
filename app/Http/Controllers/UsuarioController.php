@@ -17,13 +17,15 @@ class UsuarioController extends Controller
 
     public function show(Usuario $usuario)
     {
-        // Cargamos las direcciones y las últimas ventas del cliente
-        $usuario->load(['role', 'direcciones', 'ventas' => function ($q) {
-            $q->latest()->take(5);
-        }]);
+        $usuario->load([
+            'role', 
+            'direcciones', 
+            'ventas' => fn($q) => $q->latest()->take(5), // Compras como cliente
+            'ventasRealizadas' => fn($q) => $q->latest()->take(5) // Ventas realizadas como vendedor
+        ]);
 
-    return view('usuarios.show', compact('usuario'));
-}
+        return view('usuarios.show', compact('usuario'));
+    }
 
 
     public function create()

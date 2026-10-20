@@ -29,12 +29,15 @@ class TestingDatosSeeder extends Seeder
         $metodosPago = ['Contado', 'Transferencia', 'Tarjeta', 'Débito'];
         $estadosEnvio = ['pendiente', 'en_camino', 'entregado'];
 
+        // Obtener un usuario por defecto si no hay cliente asignado (para evitar fallos de Foreign Key en Direccion)
+        $usuarioFallback = Usuario::first();
+
         // 2. Crear 50 ventas distribuidas entre el mes actual y el mes pasado
         for ($i = 0; $i < 50; $i++) {
 
             // 50% de probabilidad para el mes actual y 50% para el mes pasado
             if (rand(0, 1) === 1) {
-                $fecha = Carbon::now()->subDays(rand(0, Carbon::now()->day - 1))->subHours(rand(0, 12));
+                $fecha = Carbon::now()->subDays(rand(0, max(Carbon::now()->day - 1, 1)))->subHours(rand(0, 12));
             } else {
                 $fecha = Carbon::now()->subMonth()->startOfMonth()->addDays(rand(0, 27))->subHours(rand(0, 12));
             }
@@ -58,9 +61,9 @@ class TestingDatosSeeder extends Seeder
                 'costo_flete'       => $costoFlete,
                 'metodo_pago'       => fake()->randomElement($metodosPago),
                 'cuotas'            => rand(1, 12),
-                'subtotal'          => 0, // Se calcula más abajo
+                'subtotal'          => 0,
                 'descuento'         => $descuento,
-                'precio_total'      => 0, // Se calcula más abajo
+                'precio_total'      => 0,
                 'fecha_compra'      => $fecha,
                 'estado'            => 'completada',
                 'notas'             => fake()->optional(0.2)->sentence(),
@@ -68,11 +71,11 @@ class TestingDatosSeeder extends Seeder
 
             // 3. Agregar entre 1 y 4 productos por venta
             $subtotalVenta = 0;
-            $items = $productos->random(rand(1, 4));
+            $items = $productos->random(rand(1, min(4, $productos->count())));
 
             foreach ($items as $prod) {
                 $cant = rand(1, 3);
-                $subtotalItem = $cant * $prod->precio_venta;
+                $subtotalItem = $cant * $prod->precio_venta; // <-- Corrección de la sintaxis
                 $subtotalVenta += $subtotalItem;
 
                 DetalleVenta::create([
@@ -92,12 +95,11 @@ class TestingDatosSeeder extends Seeder
 
             // 4. Si requiere envío, vincular con la tabla de Direcciones y crear el registro en Envio
             if ($requiereEnvio) {
-                // Obtener una dirección del cliente o crear una nueva para esta venta
                 if ($cliente && $cliente->direcciones->isNotEmpty()) {
                     $direccionId = $cliente->direcciones->random()->id;
                 } else {
                     $nuevaDir = Direccion::create([
-                        'usuario_id'    => $cliente?->id ?? 1, // Fallback al usuario ID 1 si no está registrado
+                        'usuario_id'    => $cliente?->id ?? $usuarioFallback?->id ?? 1,
                         'alias'         => 'Envío Venta #' . $venta->id,
                         'direccion'     => fake()->streetName(),
                         'numero_puerta' => fake()->buildingNumber(),
@@ -111,10 +113,8 @@ class TestingDatosSeeder extends Seeder
                     $direccionId = $nuevaDir->id;
                 }
 
-                // Determinar el estado del envío según la fecha
                 $estado = fake()->randomElement($estadosEnvio);
                 
-                // Si la venta es del mes pasado, la mayoría figura como entregado
                 if ($fecha->isPast() && !$fecha->isCurrentMonth()) {
                     $estado = fake()->boolean(90) ? 'entregado' : 'pendiente';
                 }

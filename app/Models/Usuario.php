@@ -82,4 +82,11 @@ class Usuario extends Authenticatable
     {
         return $this->role?->nombre === 'cliente';
     }
+    // En app/Models/Usuario.php
+
+    // Ventas donde actúa como Vendedor
+    public function ventasRealizadas()
+    {
+        return $this->hasMany(Venta::class, 'vendedor_id');
+    }
 }

@@ -149,22 +149,101 @@
                 </div>
             </div>
 
-            <!-- BLOQUE 3: HISTORIAL DE COMPRAS / VENTAS (SOLO PARA CLIENTES) -->
-            @if($usuario->role?->nombre === 'cliente')
-                <div class="bg-slate-100/70 border border-slate-200/60 overflow-hidden shadow-sm sm:rounded-xl p-6">
-                    <div class="flex justify-between items-center mb-4 pb-2 border-b border-slate-200">
-                        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500">
-                            Historial de Compras ({{ $usuario->ventas->count() }})
+            <!-- BLOQUE: HISTORIAL DE COMPRAS (CLIENTE) -->
+            <div class="bg-emerald-50/40 border border-emerald-200/60 overflow-hidden shadow-sm sm:rounded-xl p-6">
+                <div class="flex justify-between items-center mb-4 pb-3 border-b border-emerald-200/80">
+                    <div class="flex items-center gap-2">
+                        <span class="p-1.5 bg-emerald-100 text-emerald-700 rounded-lg text-xs">🛍️</span>
+                        <h3 class="text-xs font-black uppercase tracking-wider text-emerald-900">
+                            Historial de Compras
                         </h3>
                     </div>
+                    <span class="px-2.5 py-0.5 bg-emerald-100 text-emerald-800 text-[11px] font-bold rounded-full border border-emerald-200">
+                        {{ $usuario->ventas->count() }} registradas
+                    </span>
+                </div>
 
-                    <div class="overflow-x-auto border border-slate-200/60 rounded-xl bg-white">
+                <div class="overflow-x-auto border border-emerald-200/60 rounded-xl bg-white shadow-xs">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-200/50 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                                <th class="px-4 py-3"># Venta</th>
+                                <th class="px-4 py-3">Fecha</th>
+                                <th class="px-4 py-3">Entrega</th>
+                                <th class="px-4 py-3">Método Pago</th>
+                                <th class="px-4 py-3 text-right">Total</th>
+                                <th class="px-4 py-3 text-center">Estado</th>
+                                <th class="px-4 py-3 text-center">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-200/60 text-xs">
+                            @forelse($usuario->ventas as $venta)
+                                <tr class="hover:bg-slate-50/80 transition-colors">
+                                    <td class="px-4 py-3 font-bold text-slate-900">
+                                        #{{ $venta->id }}
+                                    </td>
+                                    <td class="px-4 py-3 text-slate-600">
+                                        {{ $venta->fecha_compra ? \Carbon\Carbon::parse($venta->fecha_compra)->format('d/m/Y H:i') : $venta->created_at->format('d/m/Y H:i') }}
+                                    </td>
+                                    <td class="px-4 py-3 text-slate-700 capitalize font-medium">
+                                        <span class="px-2 py-0.5 rounded text-[10px] font-bold {{ $venta->tipo_entrega === 'flete' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700' }}">
+                                            {{ $venta->tipo_entrega }}
+                                        </span>
+                                    </td>
+                                    <td class="px-4 py-3 text-slate-600 font-medium">
+                                        {{ $venta->metodo_pago }}
+                                    </td>
+                                    <td class="px-4 py-3 text-right font-black text-indigo-700">
+                                        $ {{ number_format($venta->precio_total, 2) }}
+                                    </td>
+                                    <td class="px-4 py-3 text-center">
+                                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase
+                                            {{ $venta->estado === 'completada' ? 'bg-emerald-100 text-emerald-800' : '' }}
+                                            {{ $venta->estado === 'pendiente' ? 'bg-amber-100 text-amber-800' : '' }}
+                                            {{ $venta->estado === 'cancelada' ? 'bg-red-100 text-red-800' : '' }}">
+                                            {{ $venta->estado }}
+                                        </span>
+                                    </td>
+                                    <td class="px-4 py-3 text-center">
+                                        <a href="{{ route('ventas.show', $venta) }}" class="text-indigo-600 hover:text-indigo-900 font-bold text-[11px] bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded-md transition-colors">
+                                            Ver Detalle
+                                        </a>
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="7" class="px-4 py-6 text-center text-slate-400 text-xs">
+                                        Este cliente aún no ha registrado ninguna compra.
+                                    </td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- BLOQUE: HISTORIAL DE VENTAS REALIZADAS (VENDEDOR) -->
+            @if($usuario->role?->nombre === 'vendedor' || $usuario->role?->nombre === 'admin')
+                <div class="bg-indigo-50/40 border border-indigo-200/60 overflow-hidden shadow-sm sm:rounded-xl p-6">
+                    <div class="flex justify-between items-center mb-4 pb-3 border-b border-indigo-200/80">
+                        <div class="flex items-center gap-2">
+                            <span class="p-1.5 bg-indigo-100 text-indigo-700 rounded-lg text-xs">💼</span>
+                            <h3 class="text-xs font-black uppercase tracking-wider text-indigo-900">
+                                Ventas Realizadas (Como Vendedor)
+                            </h3>
+                        </div>
+                        <span class="px-2.5 py-0.5 bg-indigo-100 text-indigo-800 text-[11px] font-bold rounded-full border border-indigo-200">
+                            {{ $usuario->ventasRealizadas->count() }} concretadas
+                        </span>
+                    </div>
+
+                    <div class="overflow-x-auto border border-indigo-200/60 rounded-xl bg-white shadow-xs">
                         <table class="w-full text-left border-collapse">
                             <thead>
                                 <tr class="bg-slate-200/50 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase tracking-wider">
                                     <th class="px-4 py-3"># Venta</th>
                                     <th class="px-4 py-3">Fecha</th>
-                                    <th class="px-4 py-3">Entrega</th>
+                                    <th class="px-4 py-3">Cliente</th>
                                     <th class="px-4 py-3">Método Pago</th>
                                     <th class="px-4 py-3 text-right">Total</th>
                                     <th class="px-4 py-3 text-center">Estado</th>
@@ -172,7 +251,7 @@
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-200/60 text-xs">
-                                @forelse($usuario->ventas as $venta)
+                                @forelse($usuario->ventasRealizadas as $venta)
                                     <tr class="hover:bg-slate-50/80 transition-colors">
                                         <td class="px-4 py-3 font-bold text-slate-900">
                                             #{{ $venta->id }}
@@ -180,10 +259,8 @@
                                         <td class="px-4 py-3 text-slate-600">
                                             {{ $venta->fecha_compra ? \Carbon\Carbon::parse($venta->fecha_compra)->format('d/m/Y H:i') : $venta->created_at->format('d/m/Y H:i') }}
                                         </td>
-                                        <td class="px-4 py-3 text-slate-700 capitalize font-medium">
-                                            <span class="px-2 py-0.5 rounded text-[10px] font-bold {{ $venta->tipo_entrega === 'flete' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700' }}">
-                                                {{ $venta->tipo_entrega }}
-                                            </span>
+                                        <td class="px-4 py-3 text-slate-800 font-semibold">
+                                            {{ $venta->cliente_nombre }}
                                         </td>
                                         <td class="px-4 py-3 text-slate-600 font-medium">
                                             {{ $venta->metodo_pago }}
@@ -208,7 +285,7 @@
                                 @empty
                                     <tr>
                                         <td colspan="7" class="px-4 py-6 text-center text-slate-400 text-xs">
-                                            Este cliente aún no ha registrado ninguna compra.
+                                            Este vendedor aún no ha concreto ninguna venta.
                                         </td>
                                     </tr>
                                 @endforelse
@@ -217,6 +294,7 @@
                     </div>
                 </div>
             @endif
+
 
         </div>
 

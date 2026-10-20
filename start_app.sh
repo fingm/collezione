@@ -1,23 +1,16 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# Ruta a la carpeta de tu proyecto Laravel
-PROJECT_DIR="/srv/http/collezione/"
+# Ir al directorio del proyecto
+cd /srv/http/collezione || exit
 
-cd "$PROJECT_DIR" || exit
+# 1. Iniciar servidor de Laravel expuesto a la red local
+php artisan serve --host=0.0.0.0 --port=8000 &
 
-# Iniciar php artisan serve en segundo plano
-php artisan serve &
-PID_PHP=$!
+# 2. Iniciar Vite expuesto a la red local
+npm run dev -- --host 0.0.0.0 &
 
-# Iniciar npm run dev en segundo plano
-npm run dev &
-PID_NPM=$!
-
-# Esperar 2 segundos a que los servidores levanten
+# 3. Esperar a que levanten los servicios
 sleep 2
+xdg-open http://localhost:8000
 
-# Abrir el sitio en el navegador predeterminado
-xdg-open http://127.0.0.1:8000
-
-# Mantener el script corriendo para que los procesos de fondo sigan vivos
-wait $PID_PHP $PID_NPM
+wait

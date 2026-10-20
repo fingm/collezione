@@ -1,0 +1,40 @@
+
+Pestaña caja:
+
+    . Ingresar gastos puntuales a mano
+    . gastos automaticos por compra de productos a renzo ?
+
+
+    Afecta:
+
+    . Dashboard-> balance
+
+
+Conexion con google API:
+
+    . Leer DB de google
+
+
+Emision de boleta con desgloce
+Emision de boleta con RUT
+
+Venta:
+    .Al confirmar dar opcion de imprimir boleta
+    .Borrar el + de agregar, o ponerlo al lado
+
+Producto:
+    .soft deletes
+    .stock pedido cuando esta agotado y posible fecha de entrega
+
+Usuario:
+    soft deletes    
+
+Perfil propio:
+    Ver datos, editar, validar qeu no exista mail o documento    
+
+Nivel de acceso de usuarios
+
+Manejo de comisiones
+
+
+

@@ -182,6 +182,7 @@ new class extends Component
 
         if ($cliente) {
             $this->cliente_id = $cliente->id;
+            // Asignar el nombre completo exacto a la propiedad
             $this->cliente_nombre = trim($cliente->nombre . ' ' . ($cliente->apellido ?? ''));
             $this->cliente_telefono = $cliente->telefono ?? '';
             
@@ -256,7 +257,7 @@ new class extends Component
                     'telefono' => $this->cliente_telefono ?? null,
                     'email'    => 'cliente_' . time() . '_' . rand(100, 999) . '@pos.local',
                     'password' => bcrypt('12345678'),
-                    'role_id'  => 2,
+                    'role_id'  => 3,
                 ]);
 
                 $this->cliente_id = $nuevoUsuario->id;
@@ -379,13 +380,12 @@ new class extends Component
 
         if ($queryCliente !== '' && !$this->cliente_id) {
             $clientesEncontrados = Usuario::with('direcciones')
-                ->where('role_id', 2)
                 ->where(function ($q) use ($queryCliente) {
                     $q->where('nombre', 'like', '%' . $queryCliente . '%')
                     ->orWhere('apellido', 'like', '%' . $queryCliente . '%')
                     ->orWhere('telefono', 'like', '%' . $queryCliente . '%');
                 })
-                ->take(5)
+                ->take(10)
                 ->get();
         }
 
@@ -568,40 +568,41 @@ new class extends Component
         <div class="bg-slate-100/70 border border-slate-200/60 p-6 rounded-xl shadow-sm space-y-4">
             <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700 border-b border-slate-200/80 pb-3">2. Datos del Cliente y Entrega</h3>
 
-            <div class="relative">
-                <x-input-label value="Nombre del Cliente *" class="text-xs font-bold uppercase tracking-wider text-slate-600 mb-1" />
-                
-                <x-text-input 
-                    type="text" 
-                    wire:model.live.debounce.150ms="cliente_nombre" 
-                    class="w-full mt-1 bg-slate-50 border-slate-300/80 focus:border-indigo-500 text-xs text-slate-800 rounded-lg" 
-                    placeholder="Ej: Juan Pérez" 
-                    autocomplete="off"
-                />
+    <div class="relative">
+        <x-input-label value="Nombre del Cliente *" class="text-xs font-bold uppercase tracking-wider text-slate-600 mb-1" />
+        
+        <x-text-input 
+            wire:key="input-cliente-{{ $cliente_id ?? 'nuevo' }}"
+            type="text" 
+            wire:model.live.debounce.150ms="cliente_nombre" 
+            class="w-full mt-1 bg-slate-50 border-slate-300/80 focus:border-indigo-500 text-xs text-slate-800 rounded-lg" 
+            placeholder="Ej: Juan Pérez" 
+            autocomplete="off"
+        />
 
-                @if(!empty($clientesEncontrados) && count($clientesEncontrados) > 0 && strlen(trim($cliente_nombre)) >= 1)
-                    <div class="absolute z-50 w-full bg-white border border-slate-200 rounded-xl shadow-xl mt-1 divide-y divide-slate-100 max-h-48 overflow-y-auto">
-                        @foreach($clientesEncontrados as $c)
-                            <div 
-                                wire:key="cliente-search-{{ $c->id }}"
-                                wire:mousedown.prevent="seleccionarCliente({{ $c->id }})" 
-                                class="p-2.5 hover:bg-indigo-50 cursor-pointer transition-colors flex justify-between items-center"
-                            >
-                                <div>
-                                    <span class="font-bold text-xs text-slate-900 block">
-                                        {{ $c->nombre }} {{ $c->apellido }}
-                                    </span>
-                                    @if($c->telefono)
-                                        <span class="text-[11px] text-slate-500">Tel: {{ $c->telefono }}</span>
-                                    @endif
-                                </div>
-                            </div>
-                        @endforeach
+        @if(!empty($clientesEncontrados) && count($clientesEncontrados) > 0 && strlen(trim($cliente_nombre)) >= 1)
+            <div class="absolute z-50 w-full bg-white border border-slate-200 rounded-xl shadow-xl mt-1 divide-y divide-slate-100 max-h-48 overflow-y-auto">
+                @foreach($clientesEncontrados as $c)
+                    <div 
+                        wire:key="cliente-search-{{ $c->id }}"
+                        wire:click="seleccionarCliente({{ $c->id }})" 
+                        class="p-2.5 hover:bg-indigo-50 cursor-pointer transition-colors flex justify-between items-center"
+                    >
+                        <div>
+                            <span class="font-bold text-xs text-slate-900 block">
+                                {{ $c->nombre }} {{ $c->apellido }}
+                            </span>
+                            @if($c->telefono)
+                                <span class="text-[11px] text-slate-500">Tel: {{ $c->telefono }}</span>
+                            @endif
+                        </div>
                     </div>
-                @endif
-
-                @error('cliente_nombre') <span class="text-red-600 text-xs font-semibold block mt-1">{{ $message }}</span> @enderror
+                @endforeach
             </div>
+        @endif
+
+        @error('cliente_nombre') <span class="text-red-600 text-xs font-semibold block mt-1">{{ $message }}</span> @enderror
+    </div>
 
             <div class="grid grid-cols-2 gap-3">
                 <div>

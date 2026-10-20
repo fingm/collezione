@@ -8,6 +8,7 @@ php artisan serve --host=0.0.0.0 --port=8000 &
 
 # 2. Iniciar servidor de Vite
 npm run dev &
+PID_NPM=$!
 
 # 3. Esperar 2 segundos para que los servidores levanten y abrir el navegador
 sleep 2
